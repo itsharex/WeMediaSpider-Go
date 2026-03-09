@@ -37,9 +37,10 @@ type App struct {
 	storageManager      *storage.Manager
 	trayManager         *tray.Manager
 	autostartManager    *autostart.Manager
-	closeToTray         bool // 关闭到托盘
-	rememberChoice      bool // 记住用户选择
-	forceQuit           bool // 强制退出标志
+	closeToTray         bool   // 关闭到托盘
+	rememberChoice      bool   // 记住用户选择
+	updateIgnoredDate   string // 更新忽略日期
+	forceQuit           bool   // 强制退出标志
 }
 
 // NewApp 创建应用实例
@@ -67,17 +68,24 @@ func NewApp() *App {
 
 	// 加载系统配置
 	systemConfig := config.SystemConfig{
-		CloseToTray:    true,
-		RememberChoice: false,
+		CloseToTray:       true,
+		RememberChoice:    false,
+		UpdateIgnoredDate: "",
 	}
 	if systemConfigManager != nil {
 		loadedConfig, err := systemConfigManager.Load()
 		if err == nil {
 			systemConfig = loadedConfig
+			logger.Infof("[NewApp] Loaded system config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
+				systemConfig.CloseToTray, systemConfig.RememberChoice, systemConfig.UpdateIgnoredDate)
+		} else {
+			logger.Warnf("[NewApp] Failed to load system config: %v", err)
 		}
+	} else {
+		logger.Warnf("[NewApp] systemConfigManager is nil")
 	}
 
-	return &App{
+	app := &App{
 		loginManager:        spider.NewLoginManager(),
 		configManager:       config.NewManager(),
 		systemConfigManager: systemConfigManager,
@@ -88,7 +96,11 @@ func NewApp() *App {
 		autostartManager:    autostartManager,
 		closeToTray:         systemConfig.CloseToTray,
 		rememberChoice:      systemConfig.RememberChoice,
+		updateIgnoredDate:   systemConfig.UpdateIgnoredDate,
 	}
+
+	logger.Infof("[NewApp] App created with updateIgnoredDate=%s", app.updateIgnoredDate)
+	return app
 }
 
 // Startup 应用启动时调用
@@ -203,19 +215,58 @@ func (a *App) GetRememberChoice() bool {
 	return a.rememberChoice
 }
 
+// GetUpdateIgnoredDate 获取更新忽略日期
+func (a *App) GetUpdateIgnoredDate() string {
+	logger.Infof("[GetUpdateIgnoredDate] Returning: %s", a.updateIgnoredDate)
+	return a.updateIgnoredDate
+}
+
+// SetUpdateIgnoredDate 设置更新忽略日期
+func (a *App) SetUpdateIgnoredDate(date string) {
+	logger.Infof("[SetUpdateIgnoredDate] Called with date: %s", date)
+	a.updateIgnoredDate = date
+	logger.Infof("[SetUpdateIgnoredDate] Updated field to: %s", a.updateIgnoredDate)
+
+	// 保存到配置文件
+	logger.Infof("[SetUpdateIgnoredDate] Calling saveSystemConfig")
+	a.saveSystemConfig()
+	logger.Infof("[SetUpdateIgnoredDate] saveSystemConfig completed")
+
+	// 发送配置更新事件到前端
+	if a.ctx != nil {
+		logger.Infof("[SetUpdateIgnoredDate] Emitting system-config-changed event")
+		runtime.EventsEmit(a.ctx, "system-config-changed", map[string]interface{}{
+			"closeToTray":       a.closeToTray,
+			"rememberChoice":    a.rememberChoice,
+			"updateIgnoredDate": a.updateIgnoredDate,
+		})
+	} else {
+		logger.Warnf("[SetUpdateIgnoredDate] ctx is nil, cannot emit event")
+	}
+	logger.Infof("[SetUpdateIgnoredDate] Completed")
+}
+
 // saveSystemConfig 保存系统配置到文件
 func (a *App) saveSystemConfig() {
+	logger.Infof("[saveSystemConfig] Called")
 	if a.systemConfigManager == nil {
+		logger.Warnf("[saveSystemConfig] systemConfigManager is nil, cannot save")
 		return
 	}
 
 	config := config.SystemConfig{
-		CloseToTray:    a.closeToTray,
-		RememberChoice: a.rememberChoice,
+		CloseToTray:       a.closeToTray,
+		RememberChoice:    a.rememberChoice,
+		UpdateIgnoredDate: a.updateIgnoredDate,
 	}
 
+	logger.Infof("[saveSystemConfig] Saving config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
+		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
+
 	if err := a.systemConfigManager.Save(config); err != nil {
-		logger.Errorf("Failed to save system config: %v", err)
+		logger.Errorf("[saveSystemConfig] Failed to save system config: %v", err)
+	} else {
+		logger.Infof("[saveSystemConfig] Successfully saved system config")
 	}
 }
 
@@ -572,33 +623,40 @@ type updateCache struct {
 // CheckForUpdates 检查更新
 func (a *App) CheckForUpdates() (VersionInfo, error) {
 	currentVersion := a.GetAppVersion()
+	logger.Infof("开始检查更新，当前版本: %s", currentVersion)
 
-	// 检查缓存（24小时内不重复请求）
-	cacheFile := filepath.Join(os.TempDir(), "wemediaspider_update_cache.json")
-	if cached, ok := a.loadUpdateCache(cacheFile); ok {
-		if time.Since(cached.CheckedAt) < 24*time.Hour {
-			logger.Info("使用缓存的更新信息")
-			hasUpdate := compareVersions(cached.Version, currentVersion) > 0
-			return VersionInfo{
-				CurrentVersion: currentVersion,
-				LatestVersion:  cached.Version,
-				HasUpdate:      hasUpdate,
-				UpdateURL:      cached.UpdateURL,
-				ReleaseNotes:   cached.ReleaseNotes,
-			}, nil
-		}
-	}
+	// 暂时禁用缓存，每次都重新检查
+	// cacheFile := filepath.Join(os.TempDir(), "wemediaspider_update_cache.json")
+	// if cached, ok := a.loadUpdateCache(cacheFile); ok {
+	// 	cacheAge := time.Since(cached.CheckedAt)
+	// 	logger.Infof("找到缓存: 版本=%s, 缓存时间=%v", cached.Version, cacheAge)
+	// 	if cacheAge < 24*time.Hour {
+	// 		logger.Info("使用缓存的更新信息")
+	// 		hasUpdate := compareVersions(cached.Version, currentVersion) > 0
+	// 		logger.Infof("版本比较: %s vs %s, 有更新=%v", cached.Version, currentVersion, hasUpdate)
+	// 		return VersionInfo{
+	// 			CurrentVersion: currentVersion,
+	// 			LatestVersion:  cached.Version,
+	// 			HasUpdate:      hasUpdate,
+	// 			UpdateURL:      cached.UpdateURL,
+	// 			ReleaseNotes:   cached.ReleaseNotes,
+	// 		}, nil
+	// 	}
+	// 	logger.Info("缓存已过期，重新检查")
+	// } else {
+	// 	logger.Info("未找到缓存，执行首次检查")
+	// }
 
 	// 方案1: 尝试使用 jsdelivr CDN（不受速率限制）
 	latestVersion, updateURL, releaseNotes, err := a.checkUpdateViaCDN()
 	if err == nil {
-		// 保存到缓存
-		a.saveUpdateCache(cacheFile, updateCache{
-			Version:      latestVersion,
-			UpdateURL:    updateURL,
-			ReleaseNotes: releaseNotes,
-			CheckedAt:    time.Now(),
-		})
+		// 暂时不保存缓存
+		// a.saveUpdateCache(cacheFile, updateCache{
+		// 	Version:      latestVersion,
+		// 	UpdateURL:    updateURL,
+		// 	ReleaseNotes: releaseNotes,
+		// 	CheckedAt:    time.Now(),
+		// })
 
 		hasUpdate := compareVersions(latestVersion, currentVersion) > 0
 		logger.Infof("当前版本: %s, 最新版本: %s, 有更新: %v", currentVersion, latestVersion, hasUpdate)
@@ -615,27 +673,33 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 	logger.Warnf("CDN 检查失败，尝试 GitHub API: %v", err)
 
 	// 方案2: 回退到 GitHub API
-	return a.checkUpdateViaGitHubAPI(currentVersion, cacheFile)
+	return a.checkUpdateViaGitHubAPI(currentVersion)
 }
 
 // checkUpdateViaCDN 通过 jsdelivr CDN 检查更新
 func (a *App) checkUpdateViaCDN() (version, updateURL, releaseNotes string, err error) {
+	logger.Info("尝试通过 CDN 检查更新")
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
 	// 使用 jsdelivr 获取 releases 信息（使用正确的 URL 格式）
-	req, err := http.NewRequest("GET", "https://cdn.jsdelivr.net/gh/vag-Zhao/WeMediaSpider-Go@main/version.json", nil)
+	cdnURL := "https://cdn.jsdelivr.net/gh/vag-Zhao/WeMediaSpider-Go@main/version.json"
+	logger.Infof("CDN URL: %s", cdnURL)
+	req, err := http.NewRequest("GET", cdnURL, nil)
 	if err != nil {
+		logger.Errorf("创建 CDN 请求失败: %v", err)
 		return "", "", "", err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Errorf("CDN 请求失败: %v", err)
 		return "", "", "", err
 	}
 	defer resp.Body.Close()
 
+	logger.Infof("CDN 响应状态码: %d", resp.StatusCode)
 	if resp.StatusCode != 200 {
 		return "", "", "", fmt.Errorf("CDN 返回状态码: %d", resp.StatusCode)
 	}
@@ -647,8 +711,11 @@ func (a *App) checkUpdateViaCDN() (version, updateURL, releaseNotes string, err 
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
+		logger.Errorf("解析 CDN 响应失败: %v", err)
 		return "", "", "", err
 	}
+
+	logger.Infof("CDN 返回版本信息: version=%s, updateUrl=%s", versionInfo.Version, versionInfo.UpdateURL)
 
 	return strings.TrimPrefix(versionInfo.Version, "v"),
 		versionInfo.UpdateURL,
@@ -657,7 +724,7 @@ func (a *App) checkUpdateViaCDN() (version, updateURL, releaseNotes string, err 
 }
 
 // checkUpdateViaGitHubAPI 通过 GitHub API 检查更新（回退方案）
-func (a *App) checkUpdateViaGitHubAPI(currentVersion, cacheFile string) (VersionInfo, error) {
+func (a *App) checkUpdateViaGitHubAPI(currentVersion string) (VersionInfo, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -716,13 +783,13 @@ func (a *App) checkUpdateViaGitHubAPI(currentVersion, cacheFile string) (Version
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 
-	// 保存到缓存
-	a.saveUpdateCache(cacheFile, updateCache{
-		Version:      latestVersion,
-		UpdateURL:    release.HTMLURL,
-		ReleaseNotes: release.Body,
-		CheckedAt:    time.Now(),
-	})
+	// 暂时不保存缓存
+	// a.saveUpdateCache(cacheFile, updateCache{
+	// 	Version:      latestVersion,
+	// 	UpdateURL:    release.HTMLURL,
+	// 	ReleaseNotes: release.Body,
+	// 	CheckedAt:    time.Now(),
+	// })
 
 	hasUpdate := compareVersions(latestVersion, currentVersion) > 0
 	logger.Infof("当前版本: %s, 最新版本: %s, 有更新: %v", currentVersion, latestVersion, hasUpdate)
@@ -734,6 +801,18 @@ func (a *App) checkUpdateViaGitHubAPI(currentVersion, cacheFile string) (Version
 		UpdateURL:      release.HTMLURL,
 		ReleaseNotes:   release.Body,
 	}, nil
+}
+
+// ClearUpdateCache 清除更新缓存（用于测试）
+func (a *App) ClearUpdateCache() error {
+	cacheFile := filepath.Join(os.TempDir(), "wemediaspider_update_cache.json")
+	err := os.Remove(cacheFile)
+	if err != nil && !os.IsNotExist(err) {
+		logger.Warnf("清除更新缓存失败: %v", err)
+		return err
+	}
+	logger.Info("更新缓存已清除")
+	return nil
 }
 
 // loadUpdateCache 加载更新缓存

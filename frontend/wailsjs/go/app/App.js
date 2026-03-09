@@ -30,6 +30,10 @@ export function ClearLoginCache() {
   return window['go']['app']['App']['ClearLoginCache']();
 }
 
+export function ClearUpdateCache() {
+  return window['go']['app']['App']['ClearUpdateCache']();
+}
+
 export function DeleteDataFile(arg1) {
   return window['go']['app']['App']['DeleteDataFile'](arg1);
 }
@@ -80,6 +84,10 @@ export function GetLoginStatus() {
 
 export function GetRememberChoice() {
   return window['go']['app']['App']['GetRememberChoice']();
+}
+
+export function GetUpdateIgnoredDate() {
+  return window['go']['app']['App']['GetUpdateIgnoredDate']();
 }
 
 export function HideToTray() {
@@ -148,6 +156,10 @@ export function SetCloseToTray(arg1) {
 
 export function SetRememberChoice(arg1) {
   return window['go']['app']['App']['SetRememberChoice'](arg1);
+}
+
+export function SetUpdateIgnoredDate(arg1) {
+  return window['go']['app']['App']['SetUpdateIgnoredDate'](arg1);
 }
 
 export function ShouldBlockClose() {

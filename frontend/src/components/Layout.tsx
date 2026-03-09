@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import TitleBar from './TitleBar'
 import PageTransition from './PageTransition'
+import UpdateModal from './UpdateModal'
 import { api } from '../services/api'
 
 const { Content, Sider } = AntLayout
@@ -19,11 +20,21 @@ interface LayoutProps {
   children: React.ReactNode
 }
 
+interface VersionInfo {
+  currentVersion: string
+  latestVersion: string
+  hasUpdate: boolean
+  updateUrl: string
+  releaseNotes: string
+}
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const location = useLocation()
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<VersionInfo | null>(null)
 
   const menuItems = [
     {
@@ -49,7 +60,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       setCheckingUpdate(true)
       const versionInfo = await api.checkForUpdates()
       if (versionInfo.hasUpdate) {
-        message.success(`发现新版本 ${versionInfo.latestVersion}，请前往首页查看详情`)
+        setUpdateInfo(versionInfo)
+        setShowUpdateModal(true)
       } else {
         message.success('当前已是最新版本')
       }
@@ -58,6 +70,36 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       message.error('检查更新失败，请稍后重试')
     } finally {
       setCheckingUpdate(false)
+    }
+  }
+
+  // 立即下载
+  const handleDownloadUpdate = () => {
+    if (updateInfo?.updateUrl) {
+      window.open(updateInfo.updateUrl, '_blank')
+      setShowUpdateModal(false)
+    }
+  }
+
+  // 稍后更新
+  const handleLaterUpdate = () => {
+    setShowUpdateModal(false)
+  }
+
+  // 今日不再提示
+  const handleIgnoreToday = async () => {
+    const today = new Date().toISOString().split('T')[0]
+    console.log('[Layout] handleIgnoreToday called, today=', today)
+    try {
+      const { SetUpdateIgnoredDate } = await import('../../wailsjs/go/app/App')
+      console.log('[Layout] Calling SetUpdateIgnoredDate with date:', today)
+      await SetUpdateIgnoredDate(today)
+      console.log('[Layout] SetUpdateIgnoredDate completed successfully')
+      setShowUpdateModal(false)
+      message.info('今日将不再提示更新')
+    } catch (error) {
+      console.error('[Layout] 设置忽略日期失败:', error)
+      message.error('设置失败')
     }
   }
 
@@ -171,6 +213,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Content>
         </AntLayout>
       </AntLayout>
+
+      {/* 更新提示对话框 */}
+      <UpdateModal
+        open={showUpdateModal}
+        versionInfo={updateInfo}
+        onDownload={handleDownloadUpdate}
+        onLater={handleLaterUpdate}
+        onIgnoreToday={handleIgnoreToday}
+      />
     </AntLayout>
   )
 }

@@ -10,8 +10,9 @@ import (
 
 // SystemConfig 系统配置
 type SystemConfig struct {
-	CloseToTray    bool `json:"closeToTray"`    // 关闭到托盘
-	RememberChoice bool `json:"rememberChoice"` // 记住用户选择
+	CloseToTray         bool   `json:"closeToTray"`         // 关闭到托盘
+	RememberChoice      bool   `json:"rememberChoice"`      // 记住用户选择
+	UpdateIgnoredDate   string `json:"updateIgnoredDate"`   // 更新忽略日期 (YYYY-MM-DD)
 }
 
 // SystemConfigManager 系统配置管理器
@@ -40,8 +41,9 @@ func NewSystemConfigManager() (*SystemConfigManager, error) {
 func (m *SystemConfigManager) Load() (SystemConfig, error) {
 	// 默认配置
 	defaultConfig := SystemConfig{
-		CloseToTray:    false, // 默认禁用关闭到托盘
-		RememberChoice: false, // 默认不记住选择
+		CloseToTray:       false, // 默认禁用关闭到托盘
+		RememberChoice:    false, // 默认不记住选择
+		UpdateIgnoredDate: "",    // 默认无忽略日期
 	}
 
 	// 检查文件是否存在
@@ -67,7 +69,8 @@ func (m *SystemConfigManager) Load() (SystemConfig, error) {
 		return defaultConfig, nil
 	}
 
-	logger.Infof("Loaded system config: closeToTray=%v, rememberChoice=%v", config.CloseToTray, config.RememberChoice)
+	logger.Infof("Loaded system config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
+		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
 	return config, nil
 }
 
@@ -90,6 +93,7 @@ func (m *SystemConfigManager) Save(config SystemConfig) error {
 		return err
 	}
 
-	logger.Infof("Saved system config: closeToTray=%v, rememberChoice=%v", config.CloseToTray, config.RememberChoice)
+	logger.Infof("Saved system config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
+		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
 	return nil
 }

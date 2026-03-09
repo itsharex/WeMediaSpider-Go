@@ -27,6 +27,7 @@ import { useLoginStore } from '../stores/loginStore'
 import { api } from '../services/api'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
+import UpdateModal from '../components/UpdateModal'
 import '../components/WaveAnimation.css'
 
 const HomePage: React.FC = () => {
@@ -42,41 +43,81 @@ const HomePage: React.FC = () => {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   // 检查是否应该显示更新提示（当天未忽略）
-  const shouldShowUpdatePrompt = () => {
-    const today = dayjs().format('YYYY-MM-DD')
-    const ignoredDate = localStorage.getItem('update_ignored_date')
-    return ignoredDate !== today
+  const shouldShowUpdatePrompt = async () => {
+    try {
+      console.log('[HomePage] shouldShowUpdatePrompt: 开始检查')
+      const { GetUpdateIgnoredDate } = await import('../../wailsjs/go/app/App')
+      const ignoredDate = await GetUpdateIgnoredDate()
+      const today = dayjs().format('YYYY-MM-DD')
+      console.log('[HomePage] shouldShowUpdatePrompt: ignoredDate=', ignoredDate, 'today=', today)
+      const shouldShow = ignoredDate !== today
+      console.log('[HomePage] shouldShowUpdatePrompt: 返回结果=', shouldShow)
+      return shouldShow
+    } catch (error) {
+      console.error('[HomePage] 获取忽略日期失败:', error)
+      return true // 出错时默认显示
+    }
   }
 
   // 检查更新
-  const checkForUpdates = async (manual = false) => {
+  const checkForUpdates = async (manual = false, forceShow = false) => {
     try {
       setCheckingUpdate(true)
+      console.log('[更新检查] 调用 API 检查更新, manual=', manual, 'forceShow=', forceShow)
       const versionInfo = await api.checkForUpdates()
+      console.log('[更新检查] API 返回结果:', JSON.stringify(versionInfo))
+
       if (versionInfo.hasUpdate) {
-        if (manual || shouldShowUpdatePrompt()) {
+        console.log('[更新检查] 发现新版本:', versionInfo.latestVersion)
+        const shouldShow = await shouldShowUpdatePrompt()
+        console.log('[更新检查] 是否应该显示提示:', shouldShow, 'manual=', manual, 'forceShow=', forceShow)
+
+        // forceShow 强制显示，或者 manual 手动点击，或者今天未忽略
+        if (forceShow || manual || shouldShow) {
+          console.log('[更新检查] 准备显示更新对话框')
           setUpdateInfo(versionInfo)
           setShowUpdateModal(true)
+          console.log('[更新检查] 更新对话框状态已设置为 true')
+        } else {
+          console.log('[更新检查] 今日已忽略更新提示')
         }
-      } else if (manual) {
-        message.success('当前已是最新版本')
+      } else {
+        console.log('[更新检查] 当前已是最新版本')
+        if (manual) {
+          message.success('当前已是最新版本')
+        }
       }
     } catch (error) {
-      console.error('检查更新失败:', error)
+      console.error('[更新检查] 检查更新失败:', error)
       if (manual) {
         message.error('检查更新失败，请稍后重试')
       }
     } finally {
       setCheckingUpdate(false)
+      console.log('[更新检查] 检查更新流程结束')
     }
   }
 
-  // 稍后更新（当天不再提醒）
+  // 稍后更新
   const handleLaterUpdate = () => {
-    const today = dayjs().format('YYYY-MM-DD')
-    localStorage.setItem('update_ignored_date', today)
     setShowUpdateModal(false)
-    message.info('今日将不再提醒更新')
+  }
+
+  // 今日不再提醒
+  const handleIgnoreToday = async () => {
+    const today = dayjs().format('YYYY-MM-DD')
+    console.log('[HomePage] handleIgnoreToday called, today=', today)
+    try {
+      const { SetUpdateIgnoredDate } = await import('../../wailsjs/go/app/App')
+      console.log('[HomePage] Calling SetUpdateIgnoredDate with date:', today)
+      await SetUpdateIgnoredDate(today)
+      console.log('[HomePage] SetUpdateIgnoredDate completed successfully')
+      setShowUpdateModal(false)
+      message.info('今日将不再提醒更新')
+    } catch (error) {
+      console.error('[HomePage] 设置忽略日期失败:', error)
+      message.error('设置失败')
+    }
   }
 
   // 立即下载
@@ -92,15 +133,13 @@ const HomePage: React.FC = () => {
     try {
       setChecking(true)
       if (typeof (window as any).go === 'undefined') {
+        console.log('Wails runtime not ready, skipping login check')
         return
       }
       const status = await api.getLoginStatus()
       setLoginStatus(status)
       const data = await api.getAppData()
       setAppData(data)
-
-      // 检查更新
-      checkForUpdates()
     } catch (error) {
       console.error('Failed to check status:', error)
     } finally {
@@ -108,9 +147,52 @@ const HomePage: React.FC = () => {
     }
   }
 
+  // 启动时自动触发一次更新检查（模拟用户点击）
+  const autoCheckUpdateOnStartup = async () => {
+    console.log('[自动更新] 启动时自动检查更新')
+
+    // 等待 Wails runtime 就绪
+    let retries = 0
+    const maxRetries = 10
+
+    while (retries < maxRetries) {
+      if (typeof (window as any).go !== 'undefined') {
+        console.log('[自动更新] Wails runtime 已就绪，触发更新检查')
+        try {
+          // 启动时自动检查更新，但尊重用户的"今日不再提示"设置
+          await checkForUpdates(false, false)
+          console.log('[自动更新] 更新检查完成')
+        } catch (error) {
+          console.error('[自动更新] 更新检查失败:', error)
+        }
+        return
+      }
+
+      console.log(`[自动更新] 等待 Wails runtime... (${retries + 1}/${maxRetries})`)
+      await new Promise(resolve => setTimeout(resolve, 500))
+      retries++
+    }
+
+    console.error('[自动更新] Wails runtime 初始化超时')
+  }
+
   useEffect(() => {
+    console.log('[HomePage] 组件已挂载，准备初始化')
+
+    // 清除可能存在的忽略日期，确保启动时能显示更新
+    const ignoredDate = localStorage.getItem('update_ignored_date')
+    if (ignoredDate) {
+      console.log('[HomePage] 检测到忽略日期:', ignoredDate, '，清除以确保启动时显示更新')
+      localStorage.removeItem('update_ignored_date')
+    }
+
     const timer = setTimeout(() => {
+      console.log('[HomePage] 开始检查登录状态')
       checkLoginStatus()
+
+      // 启动时自动触发一次更新检查
+      console.log('[HomePage] 启动自动更新检查')
+      autoCheckUpdateOnStartup()
     }, 100)
     return () => clearTimeout(timer)
   }, [])
@@ -653,66 +735,13 @@ const HomePage: React.FC = () => {
       </Row>
 
       {/* 更新提示对话框 */}
-      <Modal
-        title={
-          <Space>
-            <GiftOutlined style={{ color: '#07C160' }} />
-            <span>发现新版本</span>
-          </Space>
-        }
+      <UpdateModal
         open={showUpdateModal}
-        onCancel={handleLaterUpdate}
-        footer={[
-          <Button key="later" onClick={handleLaterUpdate}>
-            稍后更新
-          </Button>,
-          <Button
-            key="download"
-            type="primary"
-            icon={<CloudDownloadOutlined />}
-            onClick={handleDownloadUpdate}
-          >
-            立即下载
-          </Button>,
-        ]}
-        width={600}
-      >
-        <div style={{ padding: '16px 0' }}>
-          <Alert
-            message={
-              <Space>
-                <span>当前版本: {updateInfo?.currentVersion}</span>
-                <span>→</span>
-                <span style={{ color: '#07C160', fontWeight: 500 }}>
-                  最新版本: {updateInfo?.latestVersion}
-                </span>
-              </Space>
-            }
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-
-          {updateInfo?.releaseNotes && (
-            <div>
-              <div style={{ fontWeight: 500, marginBottom: 8 }}>更新内容：</div>
-              <div
-                style={{
-                  background: '#1a1a1a',
-                  padding: 16,
-                  borderRadius: 6,
-                  maxHeight: 400,
-                  overflow: 'auto',
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-                className="markdown-content"
-                dangerouslySetInnerHTML={{ __html: marked(updateInfo.releaseNotes) }}
-              />
-            </div>
-          )}
-        </div>
-      </Modal>
+        versionInfo={updateInfo}
+        onDownload={handleDownloadUpdate}
+        onLater={handleLaterUpdate}
+        onIgnoreToday={handleIgnoreToday}
+      />
     </div>
   )
 }
