@@ -1,0 +1,5 @@
+{
+  "version": "1.1.0",
+  "updateUrl": "https://github.com/vag-Zhao/WeMediaSpider-Go/releases/latest",
+  "releaseNotes": "新增配置持久化和更新提示优化功能"
+}
