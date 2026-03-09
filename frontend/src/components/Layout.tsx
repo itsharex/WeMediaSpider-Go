@@ -23,7 +23,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const location = useLocation()
-  const [collapsed, setCollapsed] = useState(true)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   const menuItems = [
@@ -41,11 +40,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/results',
       icon: <FileTextOutlined />,
       label: '数据',
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: '设置',
     },
   ]
 
@@ -75,22 +69,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <AntLayout style={{ height: 'calc(100vh - 40px)' }}>
         <Sider
           theme="dark"
-          width={180}
+          width={50}
           collapsedWidth={50}
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
+          collapsed={true}
+          collapsible={false}
           style={{
             background: '#0d0d0d',
             overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
+            position: 'relative',
           }}
-          trigger={
-            <div style={{ background: '#0d0d0d', borderTop: '1px solid #1f1f1f' }}>
-              {collapsed ? '›' : '‹'}
-            </div>
-          }
         >
           <Menu
             theme="dark"
@@ -102,32 +89,71 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               background: '#0d0d0d',
               fontSize: 14,
               paddingTop: 8,
-              flex: 1,
             }}
+            inlineCollapsed={true}
           />
 
-          {/* 检查更新按钮 */}
-          <div style={{
-            padding: collapsed ? '8px 0' : '8px 16px',
-            borderTop: '1px solid #1f1f1f',
-            background: '#0d0d0d',
-          }}>
-            <Button
-              type="text"
-              icon={<SyncOutlined spin={checkingUpdate} />}
-              onClick={handleCheckUpdate}
-              loading={checkingUpdate}
-              block
-              style={{
-                color: 'rgba(255, 255, 255, 0.65)',
-                height: 40,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-              }}
-            >
-              {!collapsed && '检查更新'}
-            </Button>
+          {/* 设置按钮 - 绝对定位在底部第二个位置 */}
+          <div
+            onClick={() => navigate('/settings')}
+            style={{
+              position: 'absolute',
+              bottom: 40,
+              left: 0,
+              right: 0,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: location.pathname === '/settings' ? '#fff' : 'rgba(255, 255, 255, 0.65)',
+              transition: 'all 0.3s',
+              background: location.pathname === '/settings' ? 'rgba(7, 193, 96, 0.2)' : '#0d0d0d',
+            }}
+            onMouseEnter={(e) => {
+              if (location.pathname !== '/settings') {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.85)'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (location.pathname !== '/settings') {
+                e.currentTarget.style.background = '#0d0d0d'
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.65)'
+              }
+            }}
+          >
+            <SettingOutlined style={{ fontSize: 16 }} />
+          </div>
+
+          {/* 检查更新按钮 - 绝对定位在最底部 */}
+          <div
+            onClick={handleCheckUpdate}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'rgba(255, 255, 255, 0.65)',
+              transition: 'all 0.3s',
+              borderTop: '1px solid #1f1f1f',
+              background: '#0d0d0d',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.85)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#0d0d0d'
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.65)'
+            }}
+          >
+            <SyncOutlined spin={checkingUpdate} style={{ fontSize: 16 }} />
           </div>
         </Sider>
         <AntLayout style={{ overflow: 'hidden' }}>

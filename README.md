@@ -101,17 +101,27 @@ WeMediaSpider/
 
 ## 数据存储
 
-应用数据存储在用户配置目录：
+应用数据存储在用户主目录的隐藏文件夹中：
 
-- **Windows**: `%APPDATA%\WeMediaSpider\`
-- **macOS**: `~/Library/Application Support/WeMediaSpider/`
-- **Linux**: `~/.config/WeMediaSpider/`
+- **Windows**: `%USERPROFILE%\.wemediaspider\`
+- **macOS**: `~/.wemediaspider/`
+- **Linux**: `~/.wemediaspider/`
 
-包含：
-- `config.json` - 应用配置
-- `appdata.json` - 统计数据
-- `data/` - 爬取的文章数据
-- `cache/` - 缓存文件
+目录结构：
+```
+~/.wemediaspider/
+├── config.json          # 应用配置（爬取参数、输出目录等）
+├── appdata.json         # 统计数据（文章数、公众号数等）
+├── cache.db             # SQLite 缓存数据库
+├── login_cache.json     # 登录会话缓存
+├── master.key           # AES-256-GCM 加密密钥
+└── data/                # 爬取的文章数据目录
+    ├── scrape_20260309_120000.json
+    ├── scrape_20260309_130000.json
+    └── ...
+```
+
+**默认导出目录**: `~/Documents/WeMediaSpider/`（可在设置中修改）
 
 ## 许可证
 
