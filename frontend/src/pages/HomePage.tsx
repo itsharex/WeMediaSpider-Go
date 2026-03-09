@@ -213,7 +213,6 @@ const HomePage: React.FC = () => {
       flexDirection: 'column',
       gap: 12,
       overflow: 'hidden',
-      position: 'relative',
     }}>
       {/* 顶部欢迎区 */}
       <Card
@@ -714,22 +713,6 @@ const HomePage: React.FC = () => {
           )}
         </div>
       </Modal>
-
-      {/* 检查更新按钮 */}
-      <Button
-        type="text"
-        icon={<SyncOutlined spin={checkingUpdate} />}
-        onClick={() => checkForUpdates(true)}
-        loading={checkingUpdate}
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-          color: 'rgba(255, 255, 255, 0.45)',
-          zIndex: 10,
-        }}
-        title="检查更新"
-      />
     </div>
   )
 }
