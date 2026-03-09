@@ -26,7 +26,7 @@ import { useScrapeStore } from '../stores/scrapeStore'
 import { useLoginStore } from '../stores/loginStore'
 import { api } from '../services/api'
 import dayjs from 'dayjs'
-import ReactMarkdown from 'react-markdown'
+import { marked } from 'marked'
 import '../components/WaveAnimation.css'
 
 const HomePage: React.FC = () => {
@@ -708,9 +708,8 @@ const HomePage: React.FC = () => {
                   lineHeight: 1.6,
                 }}
                 className="markdown-content"
-              >
-                <ReactMarkdown>{updateInfo.releaseNotes}</ReactMarkdown>
-              </div>
+                dangerouslySetInnerHTML={{ __html: marked(updateInfo.releaseNotes) }}
+              />
             </div>
           )}
         </div>

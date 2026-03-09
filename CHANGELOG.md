@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-03-09
+
+### Added
+- ✨ **更新检查增强**
+  - 更新内容支持 Markdown 格式渲染（标题、列表、代码块、链接等）
+  - 添加手动检查更新按钮（首页右下角）
+  - 点击"稍后更新"后当天不再提醒
+  - 手动检查更新时显示加载状态
+  - 优化更新对话框样式和间距
+
+### Fixed
+- 🐛 **样式优化**
+  - 完善 Markdown 内容样式（标题、列表、代码、表格等）
+  - 优化更新对话框的可读性
+
 ## [1.0.1] - 2026-03-09
 
 ### Fixed
@@ -104,5 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 不会上传任何用户数据到第三方服务器
 - 建议定期备份导出的凭证文件
 
+[1.0.2]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vag-Zhao/WeMediaSpider-Go/releases/tag/v1.0.0
