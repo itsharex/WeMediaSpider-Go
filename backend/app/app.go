@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	_ "embed"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,6 +18,9 @@ import (
 	"WeMediaSpider/backend/internal/tray"
 	"WeMediaSpider/backend/pkg/logger"
 )
+
+//go:embed icon.ico
+var embeddedIcon []byte
 
 // App 应用结构
 type App struct {

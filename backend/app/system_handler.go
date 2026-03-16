@@ -31,30 +31,29 @@ func (a *App) Startup(ctx context.Context) {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 
-		// 尝试加载 ICO 图标文件
-		iconPaths := []string{
-			"icon.ico",
-			"build/appicon.png",
-			"appicon.png",
-		}
-
+		// 优先使用嵌入的图标
 		var iconData []byte
-		var err error
-		var loadedPath string
-
-		for _, path := range iconPaths {
-			iconData, err = os.ReadFile(path)
-			if err == nil {
-				loadedPath = path
-				break
-			}
-		}
-
-		if err != nil {
-			logger.Warnf("Failed to load tray icon from all paths, using default")
-			iconData = nil
+		if len(embeddedIcon) > 0 {
+			iconData = embeddedIcon
+			logger.Info("Using embedded tray icon")
 		} else {
-			logger.Infof("Loaded tray icon from: %s", loadedPath)
+			// 回退：尝试从文件系统加载
+			iconPaths := []string{
+				"build/icon.ico",
+				"icon.ico",
+				"build/windows/icon.ico",
+			}
+			for _, path := range iconPaths {
+				data, err := os.ReadFile(path)
+				if err == nil {
+					iconData = data
+					logger.Infof("Loaded tray icon from: %s", path)
+					break
+				}
+			}
+			if iconData == nil {
+				logger.Warnf("Failed to load tray icon, using default")
+			}
 		}
 
 		// 传递退出回调函数
