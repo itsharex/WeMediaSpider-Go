@@ -41,8 +41,8 @@
 ### 下载使用（推荐）
 
 1. 访问 [Releases 页面](https://github.com/vag-Zhao/WeMediaSpider-Go/releases)
-2. 下载 `WeMediaSpider-v2.0.0-windows-amd64.tar.gz`
-3. 解压后运行 `WeMediaSpider.exe`
+2. 下载 
+3. 解压后运行 
 
 ### 从旧版本升级
 
