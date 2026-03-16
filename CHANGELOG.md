@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-03-16
+
+### 🚀 New Features
+
+- **数据分析模块** (全新)
+  - 新增分析页面，支持按日期范围和公众号筛选
+  - 文章发布时间分布图表（按公众号分组的折线图）
+  - 关键词词云图，可视化文章热点话题
+  - 分析数据缓存机制，避免重复计算
+  - 后端分析引擎 `backend/internal/analytics/`（analyzer、cache、keyword）
+
+- **定时任务系统** (全新)
+  - 新增定时任务页面，可视化创建和管理定时爬取任务
+  - 频率选择器替代 cron 表达式：每天/每周/每隔N小时
+  - 爬取配置表单化：公众号列表、采集天数、最大页数、请求间隔
+  - 任务卡片展示运行状态、下次执行时间、成功/失败统计
+  - 支持立即运行、启用/禁用、查看执行日志
+  - 后端调度器 `backend/internal/scheduler/`（CronManager + TaskScheduler）
+  - 数据库模型：ScheduledTask、TaskExecutionLog
+
+- **实时日志查看器** (全新)
+  - 浮动日志按钮，点击展开实时日志面板
+  - 日志缓冲区 `backend/pkg/logger/buffer.go`
+  - 支持获取最近日志、全部日志、清空日志
+
+- **NTP 时间同步** (全新)
+  - 自动同步中国 NTP 时间服务器
+  - 解决跨时区用户的日期偏差问题
+  - `backend/pkg/timeutil/ntp.go`
+
+### 🏗️ Architecture
+
+- **app.go 模块化拆分**
+  - 将 1700+ 行的 `app.go` 拆分为 7 个职责清晰的 handler 文件
+  - `system_handler.go` - 启动/关闭、托盘、自启动、版本更新
+  - `config_handler.go` - 配置加载/保存、缓存管理
+  - `scrape_handler.go` - 爬取、登录、搜索
+  - `export_handler.go` - 导出、导入
+  - `data_handler.go` - 数据文件管理、图片下载
+  - `schedule_handler.go` - 定时任务 API
+  - `analytics_handler.go` - 数据分析 API
+
+### 🖥️ UI/UX
+
+- **窗口自适应**
+  - 窗口尺寸根据屏幕分辨率自动计算（基准 1100×700 @ 1920×1080）
+  - 内容区 `transform: scale()` 等比缩放，始终一屏显示
+  - 移除固定 MaxWidth/MaxHeight 限制，支持手动调整窗口大小
+
+- **交互优化**
+  - 所有数值输入框点击自动全选（全局 focus 事件委托）
+  - 日期范围结束日期锁定为当天，不可修改
+  - 任务卡片 cron 表达式显示为中文描述（如"每天 02:00"）
+  - 空状态提示优化
+
+### 🔄 Update System
+
+- **多源并发更新检查**
+  - GitHub API、jsdelivr CDN、ghproxy 镜像三源并发
+  - 取最快成功的结果，15 秒超时兜底
+  - 24 小时本地缓存，减少重复请求
+
+### 🐛 Bug Fixes
+
+- **登录状态不同步**: 修复扫码登录成功后前端仍显示"未登录"
+  - `Login()` 中 `loginTime` 赋值顺序修正（先赋值再保存缓存）
+  - `GetStatus()` 不再因缓存解密失败而覆盖已有登录状态
+- **编译错误**: 修复 app.go 拆分未完成导致的 import 冗余和缺失函数
+- **ScrapeConfig 类型同步**: 前端 `ScrapeConfig` 接口新增 `recentDays` 字段
+
+### 📦 Dependencies
+
+- 新增 `github.com/robfig/cron/v3` - 定时任务调度
+- 新增图表组件依赖
+
 ## [1.2.0] - 2026-03-10
 
 ### 🚀 Major Changes
@@ -250,6 +325,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 不会上传任何用户数据到第三方服务器
 - 建议定期备份导出的凭证文件
 
+[2.0.0]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.0.3...v1.2.0
 [1.0.3]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/vag-Zhao/WeMediaSpider-Go/compare/v1.0.1...v1.0.2

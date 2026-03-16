@@ -57,8 +57,8 @@ func (m *Manager) GetDefault() models.Config {
 
 	return models.Config{
 		MaxPages:         10,
-		RequestInterval:  5,   // 正常速度5秒，自适应调整
-		MaxWorkers:       3,   // 适中的并发数
+		RequestInterval:  5,    // 正常速度5秒，自适应调整
+		MaxWorkers:       3,    // 适中的并发数
 		IncludeContent:   false,
 		CacheExpireHours: 96,
 		OutputDir:        outputDir,

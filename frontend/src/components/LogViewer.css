@@ -1,0 +1,26 @@
+.log-container {
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+  background: #1a1a1a;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.log-line {
+  color: #e0e0e0;
+  padding: 2px 0;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.log-line:hover {
+  background: #2a2a2a;
+}
+
+.log-empty {
+  color: #888;
+  text-align: center;
+  padding: 50px;
+}

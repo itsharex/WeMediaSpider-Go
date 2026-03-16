@@ -15,6 +15,7 @@ type ScrapeConfig struct {
 	Accounts        []string `json:"accounts"`        // 公众号列表
 	StartDate       string   `json:"startDate"`       // 开始日期 YYYY-MM-DD
 	EndDate         string   `json:"endDate"`         // 结束日期 YYYY-MM-DD
+	RecentDays      int      `json:"recentDays"`      // 采集最近N天（定时任务用，优先于 StartDate/EndDate）
 	MaxPages        int      `json:"maxPages"`        // 最大页数
 	RequestInterval int      `json:"requestInterval"` // 请求间隔
 	IncludeContent  bool     `json:"includeContent"`  // 是否获取正文

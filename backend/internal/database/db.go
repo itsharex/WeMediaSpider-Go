@@ -7,8 +7,9 @@ import (
 
 	"WeMediaSpider/backend/internal/database/models"
 	"WeMediaSpider/backend/pkg/logger"
+	"WeMediaSpider/backend/pkg/timeutil"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
@@ -28,7 +29,7 @@ func NewDatabase(dataDir string) (*Database, error) {
 	config := &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 		NowFunc: func() time.Time {
-			return time.Now().Local()
+			return timeutil.Now()
 		},
 	}
 
@@ -85,6 +86,8 @@ func (db *Database) AutoMigrate() error {
 		&models.Account{},
 		&models.Article{},
 		&models.AppStats{},
+		&models.ScheduledTask{},      // 新增：定时任务表
+		&models.TaskExecutionLog{},   // 新增：任务执行日志表
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}

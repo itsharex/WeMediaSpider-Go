@@ -2,13 +2,18 @@ import React, { useEffect, useState, useRef } from 'react'
 import {
   Card,
   Form,
-  InputNumber,
+  Input,
   Button,
   App,
   Row,
   Col,
   Switch,
   Divider,
+  Alert,
+  Table,
+  Collapse,
+  Select,
+  Checkbox,
 } from 'antd'
 import {
   ReloadOutlined,
@@ -20,12 +25,16 @@ import {
   AppstoreOutlined,
   RocketOutlined,
   EyeInvisibleOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons'
 import { useConfigStore } from '../stores/configStore'
 import { useFormStore } from '../stores/formStore'
 import { api } from '../services/api'
 import type { Config } from '../types'
 import './SettingsPage.css'
+
+const { Panel } = Collapse
+const { Option } = Select
 
 const SettingsPage: React.FC = () => {
   const { message } = App.useApp()
@@ -39,6 +48,7 @@ const SettingsPage: React.FC = () => {
   const [closeToTray, setCloseToTray] = useState(true)
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   const [autostartSilent, setAutostartSilent] = useState(false)
+
 
   // 加载配置
   const loadConfig = async () => {
@@ -64,6 +74,7 @@ const SettingsPage: React.FC = () => {
 
       // 加载托盘和自启动设置
       await loadSystemSettings()
+
     } catch (error: any) {
       message.error('加载配置失败: ' + (error.message || '未知错误'))
     } finally {
@@ -169,18 +180,27 @@ const SettingsPage: React.FC = () => {
 
     saveTimerRef.current = window.setTimeout(async () => {
       try {
-        console.log('保存配置:', JSON.stringify(values))
-        await api.saveConfig(values as Config)
-        setConfig(values as Config)
+        // 确保数值字段是数字类型
+        const configToSave = {
+          ...values,
+          maxPages: Number(values.maxPages) || 10,
+          requestInterval: Number(values.requestInterval) || 10,
+          maxWorkers: Number(values.maxWorkers) || 20,
+          cacheExpireHours: Number(values.cacheExpireHours) || 96,
+        }
+
+        console.log('保存配置:', JSON.stringify(configToSave))
+        await api.saveConfig(configToSave as Config)
+        setConfig(configToSave as Config)
 
         // 同步更新formStore
-        formStore.setMaxPages(values.maxPages)
-        formStore.setRequestInterval(values.requestInterval)
-        formStore.setMaxWorkers(values.maxWorkers)
+        formStore.setMaxPages(configToSave.maxPages)
+        formStore.setRequestInterval(configToSave.requestInterval)
+        formStore.setMaxWorkers(configToSave.maxWorkers)
         console.log('formStore 已更新:', JSON.stringify({
-          maxPages: values.maxPages,
-          requestInterval: values.requestInterval,
-          maxWorkers: values.maxWorkers,
+          maxPages: configToSave.maxPages,
+          requestInterval: configToSave.requestInterval,
+          maxWorkers: configToSave.maxWorkers,
         }))
       } catch (error: any) {
         console.error('自动保存失败:', error)
@@ -200,19 +220,28 @@ const SettingsPage: React.FC = () => {
       setLoading(true)
       const defaultConfig = await api.getDefaultConfig()
 
+      // 确保数值字段是数字类型
+      const configToSave = {
+        ...defaultConfig,
+        maxPages: Number(defaultConfig.maxPages) || 10,
+        requestInterval: Number(defaultConfig.requestInterval) || 10,
+        maxWorkers: Number(defaultConfig.maxWorkers) || 20,
+        cacheExpireHours: Number(defaultConfig.cacheExpireHours) || 96,
+      }
+
       // 保存到后端
-      await api.saveConfig(defaultConfig)
+      await api.saveConfig(configToSave)
 
       // 更新全局状态
-      setConfig(defaultConfig)
+      setConfig(configToSave)
 
       // 更新表单
-      form.setFieldsValue(defaultConfig)
+      form.setFieldsValue(configToSave)
 
       // 同步更新 formStore
-      formStore.setMaxPages(defaultConfig.maxPages)
-      formStore.setRequestInterval(defaultConfig.requestInterval)
-      formStore.setMaxWorkers(defaultConfig.maxWorkers)
+      formStore.setMaxPages(configToSave.maxPages)
+      formStore.setRequestInterval(configToSave.requestInterval)
+      formStore.setMaxWorkers(configToSave.maxWorkers)
 
       message.success('已恢复默认配置')
     } catch (error: any) {
@@ -259,7 +288,7 @@ const SettingsPage: React.FC = () => {
           initialValues={{
             maxPages: 10,
             requestInterval: 10,
-            maxWorkers: 5,
+            maxWorkers: 20,
             cacheExpireHours: 96,
           }}
         >
@@ -276,12 +305,12 @@ const SettingsPage: React.FC = () => {
                 name="maxPages"
                 rules={[{ required: true }]}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
                   max={100}
                   style={{ width: '100%' }}
                   suffix="页"
-                  className="centered-input-number"
                 />
               </Form.Item>
             </Col>
@@ -298,12 +327,12 @@ const SettingsPage: React.FC = () => {
                 name="requestInterval"
                 rules={[{ required: true }]}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
                   max={60}
                   style={{ width: '100%' }}
                   suffix="秒"
-                  className="centered-input-number"
                 />
               </Form.Item>
             </Col>
@@ -320,12 +349,12 @@ const SettingsPage: React.FC = () => {
                 name="maxWorkers"
                 rules={[{ required: true }]}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
-                  max={10}
+                  max={50}
                   style={{ width: '100%' }}
                   suffix="个"
-                  className="centered-input-number"
                 />
               </Form.Item>
             </Col>
@@ -342,18 +371,19 @@ const SettingsPage: React.FC = () => {
                 name="cacheExpireHours"
                 rules={[{ required: true }]}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
                   max={720}
                   style={{ width: '100%' }}
                   suffix="小时"
-                  className="centered-input-number"
                 />
               </Form.Item>
             </Col>
           </Row>
         </Form>
       </Card>
+
 
       {/* 系统设置 */}
       <Card

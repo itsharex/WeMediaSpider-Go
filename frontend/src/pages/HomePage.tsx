@@ -41,6 +41,7 @@ const HomePage: React.FC = () => {
   const [updateInfo, setUpdateInfo] = useState<any>(null)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [currentTime, setCurrentTime] = useState('')
 
   // 检查是否应该显示更新提示（当天未忽略）
   const shouldShowUpdatePrompt = async () => {
@@ -197,6 +198,27 @@ const HomePage: React.FC = () => {
     return () => clearTimeout(timer)
   }, [])
 
+  // 实时更新中国时间
+  useEffect(() => {
+    const updateTime = async () => {
+      try {
+        const { GetTimeInfo } = await import('../../wailsjs/go/app/App')
+        const timeInfo = await GetTimeInfo()
+        setCurrentTime(timeInfo.currentTime)
+      } catch (error) {
+        // 如果获取失败，使用本地时间
+        setCurrentTime(dayjs().format('YYYY-MM-DD HH:mm:ss'))
+      }
+    }
+
+    // 立即更新一次
+    updateTime()
+
+    // 每秒更新一次
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   // 登录
   const handleLogin = async () => {
     try {
@@ -338,7 +360,7 @@ const HomePage: React.FC = () => {
                   WeMedia Spider
                 </div>
                 <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.9)' }}>
-                  微信公众号文章智能爬虫 · {dayjs().format('YYYY年MM月DD日')}
+                  微信公众号文章智能爬虫 · {currentTime || dayjs().format('YYYY-MM-DD HH:mm:ss')}
                 </div>
               </div>
             </Space>

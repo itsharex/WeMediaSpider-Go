@@ -13,11 +13,16 @@
   "info": {
     "companyName": "WeMediaSpider",
     "productName": "WeMediaSpider",
-    "productVersion": "1.2.0",
+    "productVersion": "2.0.0",
     "copyright": "Copyright © vag-Zhao 2026",
     "comments": "微信公众号爬虫工具"
   },
   "windows": {
-    "icon": "icon.ico"
+    "icon": "icon.ico",
+    "nsis": {
+      "installMode": "perMachine",
+      "installDirectory": "$PROGRAMFILES64\\WeMediaSpider",
+      "enableWebView2RuntimeInstaller": true
+    }
   }
 }

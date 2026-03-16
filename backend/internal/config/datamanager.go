@@ -12,6 +12,7 @@ import (
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+	"WeMediaSpider/backend/pkg/timeutil"
 )
 
 // DataManager 数据管理器
@@ -67,7 +68,7 @@ func (m *DataManager) LoadData() (models.AppData, error) {
 	}
 
 	// 检查日期是否改变，如果不是今天则重置今日文章数
-	now := time.Now()
+	now := timeutil.Now()
 	today := now.Format("2006-01-02")
 	if data.LastScrapeDate != today {
 		data.TodayArticles = 0
@@ -121,8 +122,8 @@ func (m *DataManager) UpdateArticleStats(articles []models.Article) error {
 	}
 
 	// 计算今日文章数
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	now := timeutil.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, timeutil.GetChinaLocation())
 	todayArticles := 0
 	for _, article := range articles {
 		publishTime := time.Unix(article.PublishTimestamp, 0)

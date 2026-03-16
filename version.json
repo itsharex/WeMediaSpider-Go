@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "2.0.0",
   "updateUrl": "https://github.com/vag-Zhao/WeMediaSpider-Go/releases/latest",
-  "releaseNotes": "数据库迁移 + 专业级安全架构 + UI 优化"
+  "releaseNotes": "架构重构 + 定时任务系统 + 自适应UI + 多源更新检查"
 }

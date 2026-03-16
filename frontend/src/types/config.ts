@@ -11,6 +11,7 @@ export interface ScrapeConfig {
   accounts: string[]
   startDate: string
   endDate: string
+  recentDays: number
   maxPages: number
   requestInterval: number
   includeContent: boolean

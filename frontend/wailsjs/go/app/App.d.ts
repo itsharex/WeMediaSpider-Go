@@ -11,9 +11,13 @@ export function BatchDownloadImages(arg1:Array<spider.ImageInfo>,arg2:string,arg
 
 export function CancelImageDownload():Promise<void>;
 
+export function CancelScheduledTask(arg1:number):Promise<void>;
+
 export function CancelScrape():Promise<void>;
 
 export function CheckForUpdates():Promise<app.VersionInfo>;
+
+export function ClearAnalyticsCache():Promise<void>;
 
 export function ClearCache():Promise<void>;
 
@@ -21,9 +25,15 @@ export function ClearExpiredCache():Promise<void>;
 
 export function ClearLoginCache():Promise<void>;
 
+export function ClearLogs():Promise<void>;
+
 export function ClearUpdateCache():Promise<void>;
 
+export function CreateScheduledTask(arg1:models.ScheduledTask):Promise<void>;
+
 export function DeleteDataFile(arg1:string):Promise<void>;
+
+export function DeleteScheduledTask(arg1:number):Promise<void>;
 
 export function ExportArticles(arg1:Array<models.Article>,arg2:string,arg3:string):Promise<void>;
 
@@ -34,6 +44,12 @@ export function ExportToJSON(arg1:string):Promise<string>;
 export function ExtractArticleImages(arg1:string):Promise<Array<spider.ImageInfo>>;
 
 export function ForceQuit():Promise<void>;
+
+export function GetAllAccountNames():Promise<Array<string>>;
+
+export function GetAllLogs():Promise<Array<string>>;
+
+export function GetAnalyticsData(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<models.AnalyticsData>;
 
 export function GetAppData():Promise<models.AppData>;
 
@@ -49,7 +65,17 @@ export function GetDefaultConfig():Promise<models.Config>;
 
 export function GetLoginStatus():Promise<models.LoginStatus>;
 
+export function GetRecentExecutionLogs(arg1:number):Promise<Array<models.TaskExecutionLog>>;
+
+export function GetRecentLogs(arg1:number):Promise<Array<string>>;
+
 export function GetRememberChoice():Promise<boolean>;
+
+export function GetScheduledTask(arg1:number):Promise<models.ScheduledTask>;
+
+export function GetTaskExecutionLogs(arg1:number,arg2:number):Promise<Array<models.TaskExecutionLog>>;
+
+export function GetTimeInfo():Promise<Record<string, any>>;
 
 export function GetUpdateIgnoredDate():Promise<string>;
 
@@ -65,6 +91,8 @@ export function IsAutostartSilent():Promise<boolean>;
 
 export function ListDataFiles():Promise<Array<storage.DataFileInfo>>;
 
+export function ListScheduledTasks(arg1:boolean):Promise<Array<models.ScheduledTask>>;
+
 export function LoadConfig():Promise<models.Config>;
 
 export function LoadDataFile(arg1:string):Promise<Array<models.Article>>;
@@ -74,6 +102,8 @@ export function Login():Promise<void>;
 export function Logout():Promise<void>;
 
 export function OpenDataFileDialog():Promise<string>;
+
+export function RunScheduledTaskNow(arg1:number):Promise<void>;
 
 export function SaveConfig(arg1:models.Config):Promise<void>;
 
@@ -99,4 +129,10 @@ export function StartScrape(arg1:models.ScrapeConfig):Promise<Array<models.Artic
 
 export function Startup(arg1:context.Context):Promise<void>;
 
+export function SyncTimeNow():Promise<void>;
+
 export function UpdateAppData(arg1:Array<models.Article>):Promise<void>;
+
+export function UpdateScheduledTask(arg1:models.ScheduledTask):Promise<void>;
+
+export function ValidateCronExpression(arg1:string):Promise<models.CronValidationResult>;

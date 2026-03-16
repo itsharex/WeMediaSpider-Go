@@ -3,10 +3,8 @@ package spider
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
-	"time"
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
@@ -53,7 +51,30 @@ func (as *AsyncScraper) BatchScrapeAsync(
 	for _, accountName := range config.Accounts {
 		accountName := accountName // 捕获循环变量
 
-		g.Go(func() error {
+		g.Go(func() (err error) {
+			// 添加 panic 恢复
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Errorf("❌ 爬取过程发生 panic [%s]: %v", accountName, r)
+					err = fmt.Errorf("panic: %v", r)
+					if statusChan != nil {
+						statusChan <- models.AccountStatus{
+							AccountName: accountName,
+							Status:      "error",
+							Message:     fmt.Sprintf("爬取异常: %v", r),
+						}
+					}
+				}
+			}()
+
+			// 检查上下文是否已取消
+			select {
+			case <-ctx.Done():
+				logger.Warnf("⚠️  爬取被取消 [%s]", accountName)
+				return ctx.Err()
+			default:
+			}
+
 			logger.Infof("🔎 开始处理公众号 [%s]", accountName)
 
 			// 发送状态
@@ -92,72 +113,47 @@ func (as *AsyncScraper) BatchScrapeAsync(
 				}
 			}
 
-			// 获取文章列表
+			// 获取文章列表（串行获取，避免频率限制）
+			logger.Infof("📄 开始获取文章列表 [%s] 最大页数=%d", accountName, config.MaxPages)
+
 			var allArticles []models.Article
-
-			// 添加初始随机延迟，避免频率限制（2-5秒）
-			initialDelay := time.Duration(2+len(accountName)%4) * time.Second
-			logger.Infof("⏳ 等待 %v 后开始获取文章 [%s] (fakeid: %s)", initialDelay, accountName, account.Fakeid)
-			time.Sleep(initialDelay)
-
-			logger.Infof("📄 开始获取文章列表 [%s] 最大页数=%d 请求间隔=%ds", accountName, config.MaxPages, config.RequestInterval)
-
 			for page := 0; page < config.MaxPages; page++ {
+				// 检查上下文是否已取消
 				select {
 				case <-ctx.Done():
+					logger.Warnf("⚠️  爬取被取消 [%s]", accountName)
 					return ctx.Err()
 				default:
 				}
 
-				logger.Infof("📖 正在获取第 %d/%d 页 [%s]", page+1, config.MaxPages, accountName)
-
-				// 智能重试机制
-				var articles []models.Article
-				var err error
-				maxRetries := 3
-				for retry := 0; retry < maxRetries; retry++ {
-					articles, err = as.GetArticlesList(ctx, account.Fakeid, page)
-					if err == nil {
-						break
-					}
-
-					// 如果是频率限制错误，等待较长时间
+				// 获取文章列表
+				articles, err := as.GetArticlesList(ctx, account.Fakeid, page)
+				if err != nil {
+					// 如果是频率限制错误，清空已获取的数据并停止
 					if strings.Contains(err.Error(), "freq control") || strings.Contains(err.Error(), "频率") {
-						waitTime := time.Duration(10*(retry+1)) * time.Second
-						logger.Warnf("⚠️  遇到频率限制 [%s] page=%d，等待 %v 后重试 (%d/%d)", accountName, page+1, waitTime, retry+1, maxRetries)
-						time.Sleep(waitTime)
-						continue
+						logger.Errorf("❌ 遇到频率限制 [%s] page=%d，清空数据并停止爬取", accountName, page+1)
+						if statusChan != nil {
+							statusChan <- models.AccountStatus{
+								AccountName: accountName,
+								Status:      "error",
+								Message:     "遇到频率限制，请稍后重试",
+							}
+						}
+						// 清空已获取的文章列表
+						allArticles = nil
+						return nil
 					}
 
-					// 其他错误，短暂等待后重试
-					if retry < maxRetries-1 {
-						waitTime := time.Duration(3*(retry+1)) * time.Second
-						logger.Warnf("⚠️  请求失败 [%s] page=%d: %v，等待 %v 后重试 (%d/%d)", accountName, page+1, err, waitTime, retry+1, maxRetries)
-						time.Sleep(waitTime)
-						continue
-					}
-
-					// 最后一次重试失败
-					logger.Errorf("❌ 获取文章列表失败 [%s] page=%d: %v", accountName, page+1, err)
+					logger.Warnf("❌ 获取文章列表失败 [%s] page=%d: %v", accountName, page+1, err)
 					break
 				}
 
-				if err != nil {
-					logger.Errorf("❌ 获取文章列表最终失败 [%s] page=%d: %v", accountName, page+1, err)
+				if len(articles) == 0 {
+					logger.Infof("📭 第 %d 页为空，停止获取 [%s]", page+1, accountName)
 					break
 				}
 
 				logger.Infof("✅ 获取到文章 [%s] page=%d/%d count=%d", accountName, page+1, config.MaxPages, len(articles))
-
-				if len(articles) == 0 {
-					logger.Infof("📭 文章列表为空 [%s] page=%d，停止获取", accountName, page+1)
-					break
-				}
-
-				// 打印文章标题列表
-				for i, article := range articles {
-					logger.Infof("  %d. %s (发布时间: %s)", i+1, article.Title, article.PublishTime)
-				}
 
 				// 设置公众号名称
 				for i := range articles {
@@ -166,20 +162,6 @@ func (as *AsyncScraper) BatchScrapeAsync(
 				}
 
 				allArticles = append(allArticles, articles...)
-
-				// 智能请求间隔：基础延迟 + 轻微随机抖动
-				if page < config.MaxPages-1 {
-					baseDelay := time.Duration(config.RequestInterval) * time.Second
-					// 轻微随机抖动（±10%）
-					jitter := float64(baseDelay) * 0.1 * (rand.Float64() - 0.5)
-					totalDelay := baseDelay + time.Duration(jitter)
-					// 确保最小延迟2秒
-					if totalDelay < 2*time.Second {
-						totalDelay = 2 * time.Second
-					}
-					logger.Infof("⏳ 等待 %v 后继续获取下一页 [%s]", totalDelay, accountName)
-					time.Sleep(totalDelay)
-				}
 			}
 
 			logger.Infof("📊 总共获取文章 [%s] count=%d", accountName, len(allArticles))
@@ -236,6 +218,7 @@ func (as *AsyncScraper) BatchScrapeAsync(
 				// 进度计数器
 				var contentMu sync.Mutex
 				contentProgress := 0
+				successCount := 0
 
 				for i := range allArticles {
 					i := i // 捕获循环变量
@@ -247,23 +230,22 @@ func (as *AsyncScraper) BatchScrapeAsync(
 						default:
 						}
 
-						logger.Infof("正在获取文章内容 [%s] (%d/%d): %s", accountName, i+1, len(allArticles), allArticles[i].Title)
-
 						content, err := as.GetArticleContent(contentCtx, allArticles[i].Link)
-						if err != nil {
-							logger.Warnf("获取文章内容失败 [%s] (%d/%d): %s - %v", accountName, i+1, len(allArticles), allArticles[i].Title, err)
-						} else {
-							allArticles[i].Content = content
-							logger.Infof("成功获取文章内容 [%s] (%d/%d): %s (长度: %d)", accountName, i+1, len(allArticles), allArticles[i].Title, len(content))
-						}
 
-						// 更新进度
+						// 更新进度（无论成功失败）
 						contentMu.Lock()
 						contentProgress++
 						currentProgress := contentProgress
+						if err == nil {
+							allArticles[i].Content = content
+							successCount++
+							logger.Infof("✅ [%s] (%d/%d): %s (长度: %d)", accountName, currentProgress, len(allArticles), allArticles[i].Title, len(content))
+						} else {
+							logger.Warnf("❌ [%s] (%d/%d): %s - %v", accountName, currentProgress, len(allArticles), allArticles[i].Title, err)
+						}
 						contentMu.Unlock()
 
-						// 发送进度
+						// 发送进度和状态更新
 						if progressChan != nil {
 							progressChan <- models.Progress{
 								Type:    models.ProgressTypeContent,
@@ -273,18 +255,35 @@ func (as *AsyncScraper) BatchScrapeAsync(
 							}
 						}
 
-						// 轻微延迟（频率限制器已经在控制）
-						time.Sleep(time.Duration(config.RequestInterval) * time.Second)
+						// 同时更新账号状态，包含进度信息
+						if statusChan != nil {
+							statusChan <- models.AccountStatus{
+								AccountName:  accountName,
+								Status:       "content",
+								Message:      fmt.Sprintf("正在获取文章内容 (%d/%d)", currentProgress, len(allArticles)),
+								ArticleCount: len(allArticles),
+								Progress: &models.ProgressInfo{
+									Current: currentProgress,
+									Total:   len(allArticles),
+								},
+							}
+						}
+
 						return nil
 					})
 				}
 
 				// 等待所有内容获取完成
 				if err := contentGroup.Wait(); err != nil {
+					// 如果是取消错误，直接返回
+					if err == context.Canceled {
+						logger.Warnf("⚠️  获取文章内容被取消 [%s]", accountName)
+						return err
+					}
 					logger.Errorf("获取文章内容过程中出错 [%s]: %v", accountName, err)
 				}
 
-				logger.Infof("文章内容获取完成 [%s] 成功=%d 总数=%d", accountName, contentProgress, len(allArticles))
+				logger.Infof("文章内容获取完成 [%s] 成功=%d 失败=%d 总数=%d", accountName, successCount, len(allArticles)-successCount, len(allArticles))
 			}
 
 			// 关键词过滤（在获取正文内容之后进行，以便搜索全文）
@@ -340,6 +339,11 @@ func (as *AsyncScraper) BatchScrapeAsync(
 
 	// 检查错误
 	if err := g.Wait(); err != nil {
+		// 如果是取消错误，不记录为错误
+		if err == context.Canceled {
+			logger.Warnf("⚠️  爬取被用户取消")
+			return allResults, err
+		}
 		logger.Errorf("❌ 爬取过程中出现错误: %v", err)
 		return allResults, err
 	}

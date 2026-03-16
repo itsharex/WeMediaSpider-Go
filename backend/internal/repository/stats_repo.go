@@ -1,9 +1,8 @@
 package repository
 
 import (
-	"time"
-
 	"WeMediaSpider/backend/internal/database/models"
+	"WeMediaSpider/backend/pkg/timeutil"
 
 	"gorm.io/gorm"
 )
@@ -56,7 +55,7 @@ func (r *StatsRepositoryImpl) IncrementImages(count int) error {
 
 // UpdateArticleStats 更新文章统计
 func (r *StatsRepositoryImpl) UpdateArticleStats(totalArticles, totalAccounts, todayArticles int, lastScrapeTime string) error {
-	now := time.Now()
+	now := timeutil.Now()
 	today := now.Format("2006-01-02")
 
 	updates := map[string]interface{}{

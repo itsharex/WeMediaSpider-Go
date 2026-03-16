@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Button,
@@ -6,7 +6,6 @@ import {
   Input,
   Form,
   DatePicker,
-  InputNumber,
   Switch,
   Progress,
   Table,
@@ -68,6 +67,7 @@ const ScrapePage: React.FC = () => {
   const [addAccountModalVisible, setAddAccountModalVisible] = useState(false)
   const [newAccountName, setNewAccountName] = useState('')
   const [selectedCloudDrive, setSelectedCloudDrive] = useState<string | undefined>(undefined)
+  const hasFreqLimitErrorRef = useRef(false) // 使用 ref 跟踪频率限制
 
   // 加载常用公众号
   useEffect(() => {
@@ -75,6 +75,11 @@ const ScrapePage: React.FC = () => {
     if (saved) {
       setFavoriteAccounts(JSON.parse(saved))
     }
+  }, [])
+
+  // 初始化中国时间
+  useEffect(() => {
+    formStore.initChinaTime()
   }, [])
 
   // 保存常用公众号
@@ -234,21 +239,19 @@ const ScrapePage: React.FC = () => {
         dateRange: formStore.dateRange,
         maxPages: formStore.maxPages,
         requestInterval: formStore.requestInterval,
-        maxWorkers: formStore.maxWorkers,
         includeContent: formStore.includeContent,
         keywordFilter: formStore.keywordFilter,
       })
     }
-  }, [config, formStore.maxPages, formStore.requestInterval, formStore.maxWorkers, formStore.includeContent])
+  }, [config, formStore.dateRange, formStore.maxPages, formStore.requestInterval, formStore.includeContent])
 
   // 监听表单变化，保存到store
   const handleFormChange = () => {
     const values = form.getFieldsValue()
     formStore.setAccounts(values.accounts || '')
     formStore.setDateRange(values.dateRange)
-    formStore.setMaxPages(values.maxPages)
-    formStore.setRequestInterval(values.requestInterval)
-    formStore.setMaxWorkers(values.maxWorkers)
+    formStore.setMaxPages(Number(values.maxPages) || 10)
+    formStore.setRequestInterval(Number(values.requestInterval) || 10)
     formStore.setIncludeContent(values.includeContent)
     formStore.setKeywordFilter(values.keywordFilter || '')
   }
@@ -263,12 +266,51 @@ const ScrapePage: React.FC = () => {
 
     // 定义事件处理函数
     const handleProgress = (prog: any) => {
+      console.log('收到进度事件:', prog)
+
+      // 更新全局进度（用于总体进度显示）
       setProgress(prog)
+
+      // 如果进度事件包含账号信息，更新对应账号的进度
+      if (prog.message && prog.message.includes('[')) {
+        // 从消息中提取账号名称，格式如 "正在获取文章内容 [账号名] (1/10)"
+        const match = prog.message.match(/\[([^\]]+)\]/)
+        if (match && match[1]) {
+          const accountName = match[1]
+          updateAccountStatus(accountName, {
+            accountName,
+            status: 'content',
+            message: prog.message.split(']')[1]?.trim() || '正在获取文章内容...',
+            articleCount: 0,
+            progress: {
+              current: prog.current,
+              total: prog.total,
+            },
+          })
+        }
+      }
     }
 
     const handleStatus = (status: any) => {
       console.log('收到账号状态:', status)
       console.log('账号名称:', status.accountName, '文章数:', status.articleCount)
+
+      // 检查是否遇到频率限制
+      if (status.status === 'error' && status.message &&
+          (status.message.includes('频率限制') || status.message.includes('freq control'))) {
+        message.warning({
+          content: `${status.accountName}: ${status.message}`,
+          duration: 5,
+        })
+        // 设置频率限制标志
+        hasFreqLimitErrorRef.current = true
+        // 立即取消爬取
+        api.cancelScrape().catch(err => console.error('取消爬取失败:', err))
+        // 停止爬取状态
+        setScrapingInProgress(false)
+        setLoading(false)
+        return
+      }
 
       // 使用函数式更新，避免闭包问题
       updateAccountStatus(status.accountName, status)
@@ -292,9 +334,17 @@ const ScrapePage: React.FC = () => {
       // 使用实时统计的文章数，而不是事件中的 total
       const actualTotal = totalArticleCount || data.total || 0
       console.log('实际显示的文章数:', actualTotal)
-      message.success(`爬取完成！共获取 ${actualTotal} 篇文章`)
+
       setScrapingInProgress(false)
       setLoading(false)
+
+      // 如果没有获取到任何文章，不跳转
+      if (actualTotal === 0) {
+        message.warning('未获取到任何文章')
+        return
+      }
+
+      message.success(`爬取完成！共获取 ${actualTotal} 篇文章`)
 
       // 自动添加成功爬取的公众号到常用列表（去重）
       const accounts = form.getFieldValue('accounts') || ''
@@ -379,11 +429,12 @@ const ScrapePage: React.FC = () => {
         endDate: values.dateRange
           ? values.dateRange[1].format('YYYY-MM-DD')
           : '',
-        maxPages: values.maxPages || 10,
-        requestInterval: values.requestInterval || 10,
+        recentDays: 0,
+        maxPages: Number(values.maxPages) || 10,
+        requestInterval: Number(values.requestInterval) || 10,
         includeContent: values.includeContent || false,
         keywordFilter: values.keywordFilter || '',
-        maxWorkers: values.maxWorkers || 5,
+        maxWorkers: formStore.maxWorkers || 20, // 使用设置页面的并发数配置
       }
 
       setLoading(true)
@@ -394,13 +445,20 @@ const ScrapePage: React.FC = () => {
       setArticles([])
       setTotalArticleCount(0) // 重置文章计数
       setAccountArticleCounts({}) // 重置账号文章计数
+      hasFreqLimitErrorRef.current = false // 重置频率限制标志
 
       const result = await api.startScrape(config)
       setArticles(result)
 
-      // 爬取完成后跳转到结果页面
+      // 爬取完成后，检查是否有文章再决定是否跳转
       setTimeout(() => {
-        navigate('/results')
+        // 使用 result.length 而不是 totalArticleCount，避免闭包问题
+        const articleCount = result?.length || 0
+        if (!hasFreqLimitErrorRef.current && articleCount > 0) {
+          navigate('/results')
+        } else if (articleCount === 0) {
+          message.warning('未获取到任何文章，请检查配置')
+        }
       }, 1500)
     } catch (error: any) {
       // 如果是取消操作，不显示错误
@@ -424,28 +482,36 @@ const ScrapePage: React.FC = () => {
       setLoading(false)
       setProgress(null) // 立即清除进度条
 
-      // 如果有已爬取的文章，询问是否查看结果
-      if (totalArticleCount > 0) {
-        setTimeout(() => {
-          message.info({
-            content: `已获取 ${totalArticleCount} 篇文章，是否查看结果？`,
-            duration: 5,
-            onClick: () => navigate('/results')
+      // 更新所有账号状态为已取消
+      accountStatuses.forEach(status => {
+        if (status.status !== 'completed' && status.status !== 'error') {
+          updateAccountStatus(status.accountName, {
+            ...status,
+            status: 'error',
+            message: '已取消'
           })
-        }, 500)
-      } else {
-        // 没有文章，清除状态
-        clearAccountStatuses()
-        setTotalArticleCount(0)
-      }
+        }
+      })
+
+      // 不跳转到结果页面，不清除账号状态
+      // 账号状态容器保持显示
     } catch (error: any) {
       // 取消操作不应该失败，如果失败也只是提示
       message.info('取消操作: ' + (error.message || '未知错误'))
       setScrapingInProgress(false)
       setLoading(false)
       setProgress(null)
-      clearAccountStatuses()
-      setTotalArticleCount(0)
+
+      // 更新所有账号状态为已取消
+      accountStatuses.forEach(status => {
+        if (status.status !== 'completed' && status.status !== 'error') {
+          updateAccountStatus(status.accountName, {
+            ...status,
+            status: 'error',
+            message: '已取消'
+          })
+        }
+      })
     }
   }
 
@@ -471,22 +537,40 @@ const ScrapePage: React.FC = () => {
       title: '公众号',
       dataIndex: 'accountName',
       key: 'accountName',
+      width: 120,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 280,
       render: (status: string, record: AccountStatus) => (
-        <Space>
-          {getStatusIcon(status)}
-          {record.message}
-        </Space>
+        <div style={{ width: '100%' }}>
+          {/* 如果有进度条，只显示进度条 */}
+          {record.progress && record.progress.total > 0 ? (
+            <Progress
+              percent={Math.round((record.progress.current / record.progress.total) * 100)}
+              size="small"
+              status={status === 'completed' ? 'success' : status === 'error' ? 'exception' : 'active'}
+              format={(percent) => `${record.progress?.current || 0}/${record.progress?.total || 0}`}
+              style={{ marginBottom: 0 }}
+            />
+          ) : (
+            /* 没有进度条时显示状态文字 */
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {getStatusIcon(status)}
+              <span style={{ marginLeft: 8 }}>{record.message}</span>
+            </div>
+          )}
+        </div>
       ),
     },
     {
       title: '文章数',
       dataIndex: 'articleCount',
       key: 'articleCount',
+      width: 80,
+      align: 'center' as const,
     },
   ]
 
@@ -612,7 +696,8 @@ const ScrapePage: React.FC = () => {
               >
                 <RangePicker
                   style={{ width: '100%' }}
-                  disabled={isScrapingInProgress}
+                  disabled={isScrapingInProgress ? [true, true] : [false, true]}
+                  allowEmpty={[false, false]}
                 />
               </Form.Item>
 
@@ -655,18 +740,20 @@ const ScrapePage: React.FC = () => {
             </div>
 
             {/* 第三行：数字配置和开关 */}
-            <div style={{ display: 'flex', gap: '16px', marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: '86px', marginBottom: 8 }}>
               <Form.Item
                 label="最大页数"
                 name="maxPages"
                 labelCol={{ flex: '90px' }}
-                style={{ marginBottom: 0, width: '25%' }}
+                style={{ marginBottom: 0, flex: '0 0 200px' }}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
                   max={100}
                   style={{ width: '100%' }}
                   disabled={isScrapingInProgress}
+                  suffix="页"
                 />
               </Form.Item>
 
@@ -674,9 +761,10 @@ const ScrapePage: React.FC = () => {
                 label="请求间隔"
                 name="requestInterval"
                 labelCol={{ flex: '90px' }}
-                style={{ marginBottom: 0, width: '25%' }}
+                style={{ marginBottom: 0, flex: '0 0 200px', marginRight: '-90px' }}
               >
-                <InputNumber
+                <Input
+                  type="number"
                   min={1}
                   max={60}
                   style={{ width: '100%' }}
@@ -685,29 +773,16 @@ const ScrapePage: React.FC = () => {
                 />
               </Form.Item>
 
-              <Form.Item
-                label="并发数"
-                name="maxWorkers"
-                labelCol={{ flex: '103px' }}
-                style={{ marginBottom: 0, width: '25%' }}
-              >
-                <InputNumber
-                  min={1}
-                  max={10}
-                  style={{ width: '100%' }}
-                  disabled={isScrapingInProgress}
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="获取正文"
-                name="includeContent"
-                valuePropName="checked"
-                labelCol={{ flex: '158px' }}
-                style={{ marginBottom: 0, width: '25%' }}
-              >
-                <Switch disabled={isScrapingInProgress} />
-              </Form.Item>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <span style={{ width: '125px', textAlign: 'right', marginRight: '8px' }}>获取正文</span>
+                <Form.Item
+                  name="includeContent"
+                  valuePropName="checked"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Switch disabled={isScrapingInProgress} />
+                </Form.Item>
+              </div>
             </div>
 
             {/* 按钮行 */}
@@ -736,36 +811,36 @@ const ScrapePage: React.FC = () => {
           </Form>
         </Card>
 
-        {/* 进度显示 */}
-        {progress && (
-          <Card size="small" styles={{ body: { padding: 12 } }} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-            <div style={{ marginBottom: 8, fontSize: 12, color: '#999', display: 'flex', justifyContent: 'space-between' }}>
-              <span>{progress.message}</span>
-              {totalArticleCount > 0 && <span>已获取 {totalArticleCount} 篇文章</span>}
+        {/* 账号状态 - 始终显示容器 */}
+        <Card
+          title={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>账号状态</span>
+              {totalArticleCount > 0 && (
+                <span style={{ fontSize: 12, color: '#999', fontWeight: 'normal' }}>
+                  已获取 {totalArticleCount} 篇文章
+                </span>
+              )}
             </div>
-            <Progress
-              percent={
-                progress.total > 0
-                  ? Math.round((progress.current / progress.total) * 100)
-                  : 0
-              }
-              status={isScrapingInProgress ? 'active' : 'success'}
-            />
-          </Card>
-        )}
-
-        {/* 账号状态 */}
-        {accountStatuses.length > 0 && (
-          <Card title="账号状态" size="small" styles={{ body: { padding: 16 } }} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)', flex: 1, overflow: 'hidden' }}>
+          }
+          size="small"
+          styles={{ body: { padding: 16 } }}
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)', flex: 1, overflow: 'hidden' }}
+        >
+          {accountStatuses.length > 0 ? (
             <Table
               dataSource={accountStatuses.map((item, index) => ({ ...item, key: `${item.accountName}-${index}` }))}
               columns={columns}
               pagination={false}
               size="small"
-              scroll={{ y: 200 }}
+              scroll={{ y: 300 }}
             />
-          </Card>
-        )}
+          ) : (
+            <div style={{ textAlign: 'center', color: '#999', padding: '40px 0' }}>
+              暂无爬取任务
+            </div>
+          )}
+        </Card>
 
         {/* 结果提示 */}
         {articles && articles.length > 0 && !isScrapingInProgress && (

@@ -11,7 +11,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
+
+	"WeMediaSpider/backend/pkg/timeutil"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -171,7 +172,7 @@ func EncryptToZGSWX(plaintext []byte, masterKey []byte) ([]byte, error) {
 		Magic:      MagicNumber,
 		Version:    CurrentVersion,
 		Reserved:   0,
-		Timestamp:  time.Now().Unix(),
+		Timestamp:  timeutil.Now().Unix(),
 		DataLength: uint32(len(ciphertext)),
 		Salt:       salt,
 		Nonce:      nonce,

@@ -1,22 +1,19 @@
-/* InputNumber 数值居中 */
-.centered-input-number .ant-input-number-input {
-  text-align: center !important;
-  font-size: 16px;
-  font-weight: 600;
-  color: #07C160;
+/* 隐藏 number input 的增减按钮 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-/* 减小输入框高度 */
-.centered-input-number {
-  height: 36px;
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-.centered-input-number .ant-input-number-input {
-  height: 34px;
-  line-height: 34px;
+/* 数值输入框样式 */
+input[type="number"] {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-/* hover 时显示控制按钮 */
-.centered-input-number .ant-input-number-handler-wrap {
-  opacity: 1;
-}

@@ -12,4 +12,8 @@ export interface AccountStatus {
   status: string
   message: string
   articleCount: number
+  progress?: {
+    current: number
+    total: number
+  }
 }

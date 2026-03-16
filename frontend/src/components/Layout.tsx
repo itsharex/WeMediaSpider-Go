@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Layout as AntLayout, Menu, Button, App } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   HomeOutlined,
   CloudDownloadOutlined,
   FileTextOutlined,
+  BarChartOutlined,
+  ClockCircleOutlined,
   SettingOutlined,
   WechatOutlined,
   SyncOutlined,
@@ -35,6 +37,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<VersionInfo | null>(null)
+  const [contentZoom, setContentZoom] = useState(1)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // 基准设计尺寸（1100x700 窗口去掉 50px 侧栏、40px 标题栏）
+  const BASE_WIDTH = 1050
+  const BASE_HEIGHT = 660
+
+  const updateZoom = useCallback(() => {
+    if (!contentRef.current) return
+    const parent = contentRef.current.parentElement
+    if (!parent) return
+    const availW = parent.clientWidth
+    const availH = parent.clientHeight
+    if (availW <= 0 || availH <= 0) return
+    const zoom = Math.min(availW / BASE_WIDTH, availH / BASE_HEIGHT)
+    setContentZoom(zoom)
+  }, [])
+
+  useEffect(() => {
+    updateZoom()
+    window.addEventListener('resize', updateZoom)
+    return () => window.removeEventListener('resize', updateZoom)
+  }, [updateZoom])
 
   const menuItems = [
     {
@@ -51,6 +76,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/results',
       icon: <FileTextOutlined />,
       label: '数据',
+    },
+    {
+      key: '/analytics',
+      icon: <BarChartOutlined />,
+      label: '分析',
+    },
+    {
+      key: '/schedule',
+      icon: <ClockCircleOutlined />,
+      label: '定时',
     },
   ]
 
@@ -104,11 +139,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }
 
   return (
-    <AntLayout style={{ minHeight: '100vh', maxHeight: '100vh', overflow: 'hidden' }}>
+    <AntLayout style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 自定义标题栏 */}
       <TitleBar />
 
-      <AntLayout style={{ height: 'calc(100vh - 40px)' }}>
+      <AntLayout style={{ flex: 1, minHeight: 0 }}>
         <Sider
           theme="dark"
           width={50}
@@ -198,18 +233,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <SyncOutlined spin={checkingUpdate} style={{ fontSize: 16 }} />
           </div>
         </Sider>
-        <AntLayout style={{ overflow: 'hidden' }}>
+        <AntLayout style={{ overflow: 'hidden', minHeight: 0 }}>
           <Content
             style={{
-              padding: '12px',
+              padding: 0,
               background: 'transparent',
               overflow: 'hidden',
               height: '100%',
             }}
           >
-            <PageTransition>
-              {children}
-            </PageTransition>
+            <div
+              ref={contentRef}
+              style={{
+                width: `${100 / contentZoom}%`,
+                height: `${100 / contentZoom}%`,
+                transform: `scale(${contentZoom})`,
+                transformOrigin: 'top left',
+                overflow: 'hidden',
+                padding: '12px',
+              }}
+            >
+              <PageTransition>
+                {children}
+              </PageTransition>
+            </div>
           </Content>
         </AntLayout>
       </AntLayout>

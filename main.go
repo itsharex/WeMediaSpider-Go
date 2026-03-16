@@ -28,11 +28,44 @@ var (
 	procFindWindow   = user32.NewProc("FindWindowW")
 	procShowWindow   = user32.NewProc("ShowWindow")
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
+	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
 )
 
 const (
-	SW_RESTORE = 9
+	SW_RESTORE       = 9
+	SM_CXSCREEN      = 0
+	SM_CYSCREEN      = 1
 )
+
+// getScreenSize 获取屏幕分辨率
+func getScreenSize() (int, int) {
+	w, _, _ := procGetSystemMetrics.Call(SM_CXSCREEN)
+	h, _, _ := procGetSystemMetrics.Call(SM_CYSCREEN)
+	if w == 0 || h == 0 {
+		return 1920, 1080 // fallback
+	}
+	return int(w), int(h)
+}
+
+// calcWindowSize 根据屏幕分辨率计算窗口尺寸
+// 基准: 1100x700 @ 1920x1080，占屏幕约 57%x65%
+func calcWindowSize() (width, height int) {
+	screenW, screenH := getScreenSize()
+
+	// 按屏幕比例缩放，保持与基准相同的占比
+	width = screenW * 1100 / 1920
+	height = screenH * 700 / 1080
+
+	// 限制最小尺寸
+	if width < 900 {
+		width = 900
+	}
+	if height < 580 {
+		height = 580
+	}
+
+	return width, height
+}
 
 // createMutex 创建互斥锁，用于防止多实例运行
 func createMutex(name string) (uintptr, error) {
@@ -75,6 +108,15 @@ func setForegroundWindow(hwnd uintptr) bool {
 }
 
 func main() {
+	// 全局 panic 恢复
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("程序发生严重错误: %v\n", r)
+			fmt.Println("请查看日志文件获取详细信息")
+			os.Exit(1)
+		}
+	}()
+
 	// 单实例检测 - 使用互斥锁
 	mutexName := "Global\\WeMediaSpider_SingleInstance_Mutex"
 	_, mutexErr := createMutex(mutexName)
@@ -107,13 +149,16 @@ func main() {
 	// Create an instance of the app structure
 	application := app.NewApp()
 
+	// 根据屏幕分辨率计算窗口尺寸
+	winWidth, winHeight := calcWindowSize()
+
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:     "WeMediaSpider - 微信公众号爬虫",
-		Width:     1100,
-		Height:    700,
+		Width:     winWidth,
+		Height:    winHeight,
 		MinWidth:  900,
-		MinHeight: 600,
+		MinHeight: 580,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

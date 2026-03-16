@@ -1,12 +1,11 @@
 import React from 'react'
 import {
   MinusOutlined,
-  BorderOutlined,
   CloseOutlined,
   WechatOutlined,
 } from '@ant-design/icons'
 import { Checkbox, App, Button } from 'antd'
-import { WindowMinimise, WindowToggleMaximise, Quit } from '../../wailsjs/runtime/runtime'
+import { WindowMinimise, Quit } from '../../wailsjs/runtime/runtime'
 import './TitleBar.css'
 
 const TitleBar: React.FC = () => {
@@ -14,10 +13,6 @@ const TitleBar: React.FC = () => {
 
   const handleMinimize = () => {
     WindowMinimise()
-  }
-
-  const handleMaximize = () => {
-    WindowToggleMaximise()
   }
 
   const handleClose = async () => {
@@ -115,9 +110,6 @@ const TitleBar: React.FC = () => {
       <div className="title-bar-controls" data-wails-no-drag>
         <div className="title-bar-button minimize" onClick={handleMinimize}>
           <MinusOutlined style={{ fontSize: 12, color: '#fff' }} />
-        </div>
-        <div className="title-bar-button maximize" onClick={handleMaximize}>
-          <BorderOutlined style={{ fontSize: 11, color: '#fff' }} />
         </div>
         <div className="title-bar-button close" onClick={handleClose}>
           <CloseOutlined style={{ fontSize: 12, color: '#fff' }} />

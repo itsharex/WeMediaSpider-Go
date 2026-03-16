@@ -2,7 +2,8 @@ package utils
 
 import (
 	"math/rand"
-	"time"
+
+	"WeMediaSpider/backend/pkg/timeutil"
 )
 
 var userAgents = []string{
@@ -18,7 +19,7 @@ var userAgents = []string{
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(timeutil.Now().UnixNano())
 }
 
 // GetRandomUserAgent 获取随机 User-Agent

@@ -2,7 +2,7 @@
 
 微信公众号文章智能爬虫 - 支持批量爬取、多格式导出、数据库存储、专业级安全架构
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/vag-Zhao/WeMediaSpider-Go/releases)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/vag-Zhao/WeMediaSpider-Go/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.18+-00ADD8.svg)](https://golang.org/)
 [![Wails](https://img.shields.io/badge/Wails-v2-red.svg)](https://wails.io/)
@@ -11,16 +11,23 @@
 
 ![应用界面](wx.png)
 
-## ✨ v1.2.0 重大更新
+## ✨ v2.0.0 重大更新
 
-- 🗄️ **数据库迁移**: JSON → SQLite，性能大幅提升
-- 🔐 **专业级安全**: AES-256-GCM + HMAC 完整性校验
-- 📊 **按公众号分组**: 数据按公众号分组显示
-- 🎨 **UI 全面优化**: 优化布局、滚动体验、固定标题
+- 📊 **数据分析**: 全新分析页面，文章时间分布图表 + 关键词词云
+- ⏰ **定时任务**: 可视化配置定时爬取，支持每天/每周/间隔执行
+- 📋 **实时日志**: 浮动日志面板，实时查看运行状态
+- 🏗️ **架构重构**: app.go 拆分为 7 个模块化 handler 文件
+- 🖥️ **自适应UI**: 窗口尺寸自适应屏幕分辨率，内容等比缩放
+- 🔄 **多源更新检查**: GitHub API + CDN + 镜像并发检查
+- 🔐 **登录修复**: 修复扫码登录后状态不同步问题
+- 🕐 **NTP时间同步**: 自动对齐中国时间，解决跨时区偏差
 
 ## 🚀 核心功能
 
 - **批量爬取**: 多公众号并发爬取，实时进度显示
+- **定时任务**: 可视化配置定时爬取，支持每天/每周/间隔执行
+- **数据分析**: 文章时间分布图表、关键词词云
+- **实时日志**: 浮动日志面板，实时查看运行状态
 - **多格式导出**: Excel、CSV、JSON、Markdown
 - **图片下载**: 批量下载文章图片
 - **数据库存储**: SQLite + GORM，高效查询
@@ -34,12 +41,12 @@
 ### 下载使用（推荐）
 
 1. 访问 [Releases 页面](https://github.com/vag-Zhao/WeMediaSpider-Go/releases)
-2. 下载 `WeMediaSpider-v1.2.0-windows-amd64-with-exe.tar.gz`
+2. 下载 `WeMediaSpider-v2.0.0-windows-amd64.tar.gz`
 3. 解压后运行 `WeMediaSpider.exe`
 
 ### 从旧版本升级
 
-**重要**: v1.2.0 包含数据格式变更，需要迁移。
+**重要**: v2.0.0 包含架构重构，建议全新安装。
 
 ```bash
 # 1. 备份数据（推荐）

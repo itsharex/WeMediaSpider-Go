@@ -10,12 +10,20 @@ export function CancelImageDownload() {
   return window['go']['app']['App']['CancelImageDownload']();
 }
 
+export function CancelScheduledTask(arg1) {
+  return window['go']['app']['App']['CancelScheduledTask'](arg1);
+}
+
 export function CancelScrape() {
   return window['go']['app']['App']['CancelScrape']();
 }
 
 export function CheckForUpdates() {
   return window['go']['app']['App']['CheckForUpdates']();
+}
+
+export function ClearAnalyticsCache() {
+  return window['go']['app']['App']['ClearAnalyticsCache']();
 }
 
 export function ClearCache() {
@@ -30,12 +38,24 @@ export function ClearLoginCache() {
   return window['go']['app']['App']['ClearLoginCache']();
 }
 
+export function ClearLogs() {
+  return window['go']['app']['App']['ClearLogs']();
+}
+
 export function ClearUpdateCache() {
   return window['go']['app']['App']['ClearUpdateCache']();
 }
 
+export function CreateScheduledTask(arg1) {
+  return window['go']['app']['App']['CreateScheduledTask'](arg1);
+}
+
 export function DeleteDataFile(arg1) {
   return window['go']['app']['App']['DeleteDataFile'](arg1);
+}
+
+export function DeleteScheduledTask(arg1) {
+  return window['go']['app']['App']['DeleteScheduledTask'](arg1);
 }
 
 export function ExportArticles(arg1, arg2, arg3) {
@@ -56,6 +76,18 @@ export function ExtractArticleImages(arg1) {
 
 export function ForceQuit() {
   return window['go']['app']['App']['ForceQuit']();
+}
+
+export function GetAllAccountNames() {
+  return window['go']['app']['App']['GetAllAccountNames']();
+}
+
+export function GetAllLogs() {
+  return window['go']['app']['App']['GetAllLogs']();
+}
+
+export function GetAnalyticsData(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetAnalyticsData'](arg1, arg2, arg3, arg4);
 }
 
 export function GetAppData() {
@@ -86,8 +118,28 @@ export function GetLoginStatus() {
   return window['go']['app']['App']['GetLoginStatus']();
 }
 
+export function GetRecentExecutionLogs(arg1) {
+  return window['go']['app']['App']['GetRecentExecutionLogs'](arg1);
+}
+
+export function GetRecentLogs(arg1) {
+  return window['go']['app']['App']['GetRecentLogs'](arg1);
+}
+
 export function GetRememberChoice() {
   return window['go']['app']['App']['GetRememberChoice']();
+}
+
+export function GetScheduledTask(arg1) {
+  return window['go']['app']['App']['GetScheduledTask'](arg1);
+}
+
+export function GetTaskExecutionLogs(arg1, arg2) {
+  return window['go']['app']['App']['GetTaskExecutionLogs'](arg1, arg2);
+}
+
+export function GetTimeInfo() {
+  return window['go']['app']['App']['GetTimeInfo']();
 }
 
 export function GetUpdateIgnoredDate() {
@@ -118,6 +170,10 @@ export function ListDataFiles() {
   return window['go']['app']['App']['ListDataFiles']();
 }
 
+export function ListScheduledTasks(arg1) {
+  return window['go']['app']['App']['ListScheduledTasks'](arg1);
+}
+
 export function LoadConfig() {
   return window['go']['app']['App']['LoadConfig']();
 }
@@ -136,6 +192,10 @@ export function Logout() {
 
 export function OpenDataFileDialog() {
   return window['go']['app']['App']['OpenDataFileDialog']();
+}
+
+export function RunScheduledTaskNow(arg1) {
+  return window['go']['app']['App']['RunScheduledTaskNow'](arg1);
 }
 
 export function SaveConfig(arg1) {
@@ -186,6 +246,18 @@ export function Startup(arg1) {
   return window['go']['app']['App']['Startup'](arg1);
 }
 
+export function SyncTimeNow() {
+  return window['go']['app']['App']['SyncTimeNow']();
+}
+
 export function UpdateAppData(arg1) {
   return window['go']['app']['App']['UpdateAppData'](arg1);
+}
+
+export function UpdateScheduledTask(arg1) {
+  return window['go']['app']['App']['UpdateScheduledTask'](arg1);
+}
+
+export function ValidateCronExpression(arg1) {
+  return window['go']['app']['App']['ValidateCronExpression'](arg1);
 }

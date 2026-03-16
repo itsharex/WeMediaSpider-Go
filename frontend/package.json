@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.2.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,9 @@
     "antd": "^5.12.0",
     "zustand": "^4.4.7",
     "dayjs": "^1.11.10",
-    "marked": "^9.1.6"
+    "marked": "^9.1.6",
+    "echarts": "^5.5.0",
+    "echarts-wordcloud": "^2.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.0.17",

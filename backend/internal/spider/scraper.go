@@ -212,8 +212,16 @@ func (s *Scraper) GetArticlesList(ctx context.Context, fakeid string, page int) 
 	s.rateLimiter.RecordSuccess()
 
 	articles := make([]models.Article, 0, len(result.AppMsgList))
+	// 使用中国时区（UTC+8）
+	chinaLoc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		// 如果加载失败，使用固定时区 UTC+8
+		chinaLoc = time.FixedZone("CST", 8*3600)
+		logger.Warnf("无法加载 Asia/Shanghai 时区，使用固定 UTC+8: %v", err)
+	}
 	for _, item := range result.AppMsgList {
-		publishTime := time.Unix(item.UpdateTime, 0)
+		// 将 Unix 时间戳转换为中国时区的时间
+		publishTime := time.Unix(item.UpdateTime, 0).In(chinaLoc)
 		articles = append(articles, models.Article{
 			ID:               item.Aid,
 			Title:            item.Title,

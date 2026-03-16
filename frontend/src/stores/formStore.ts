@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import dayjs, { Dayjs } from 'dayjs'
+import { GetTimeInfo } from '../../wailsjs/go/app/App'
 
 interface FormState {
   accounts: string
@@ -18,6 +19,19 @@ interface FormState {
   setIncludeContent: (includeContent: boolean) => void
   setKeywordFilter: (keywordFilter: string) => void
   reset: () => void
+  initChinaTime: () => Promise<void>
+}
+
+// 获取中国时间的今天
+const getChinaToday = async (): Promise<Dayjs> => {
+  try {
+    const timeInfo = await GetTimeInfo()
+    // 使用 currentDate 字段，避免时区转换问题
+    return dayjs(timeInfo.currentDate)
+  } catch (error) {
+    console.error('获取中国时间失败，使用本地时间:', error)
+    return dayjs()
+  }
 }
 
 const defaultState = {
@@ -25,7 +39,7 @@ const defaultState = {
   dateRange: [dayjs().subtract(30, 'day'), dayjs()] as [Dayjs, Dayjs],
   maxPages: 10,
   requestInterval: 10,
-  maxWorkers: 5,
+  maxWorkers: 20,
   includeContent: false,
   keywordFilter: '',
 }
@@ -35,13 +49,24 @@ export const useFormStore = create<FormState>()(
     (set) => ({
       ...defaultState,
       setAccounts: (accounts) => set({ accounts }),
-      setDateRange: (dateRange) => set({ dateRange }),
+      setDateRange: (dateRange) => set((state) => {
+        if (dateRange) {
+          // endDate 始终锁定为当天
+          const currentEnd = state.dateRange ? state.dateRange[1] : dayjs()
+          return { dateRange: [dateRange[0], currentEnd] }
+        }
+        return { dateRange }
+      }),
       setMaxPages: (maxPages) => set({ maxPages }),
       setRequestInterval: (requestInterval) => set({ requestInterval }),
       setMaxWorkers: (maxWorkers) => set({ maxWorkers }),
       setIncludeContent: (includeContent) => set({ includeContent }),
       setKeywordFilter: (keywordFilter) => set({ keywordFilter }),
       reset: () => set(defaultState),
+      initChinaTime: async () => {
+        const chinaToday = await getChinaToday()
+        set({ dateRange: [chinaToday.subtract(30, 'day'), chinaToday] })
+      },
     }),
     {
       name: 'form-storage',

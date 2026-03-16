@@ -5,6 +5,7 @@ import (
 
 	"WeMediaSpider/backend/internal/database/models"
 	appmodels "WeMediaSpider/backend/internal/models"
+	"WeMediaSpider/backend/pkg/timeutil"
 )
 
 // ConvertToDBArticle 将业务模型转换为数据库模型
@@ -66,8 +67,8 @@ func ConvertToAppData(stats *models.AppStats, accountNames []string) appmodels.A
 
 // CalculateTodayArticles 计算今日文章数
 func CalculateTodayArticles(articles []appmodels.Article) int {
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	now := timeutil.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, timeutil.GetChinaLocation())
 	todayArticles := 0
 	for _, article := range articles {
 		publishTime := time.Unix(article.PublishTimestamp, 0)

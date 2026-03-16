@@ -7,6 +7,7 @@ import (
 	"WeMediaSpider/backend/internal/database/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ArticleRepository 文章仓储接口
@@ -55,8 +56,16 @@ func (r *ArticleRepositoryImpl) BatchCreate(articles []*models.Article) error {
 			}
 
 			batch := articles[i:end]
-			// 使用 Clauses 处理冲突（忽略重复）
-			if err := tx.Clauses().CreateInBatches(batch, batchSize).Error; err != nil {
+			// 使用 Clauses 处理冲突：遇到重复的 article_id 时更新记录
+			if err := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{{Name: "article_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{
+					"title", "link", "digest", "content",
+					"publish_time", "publish_timestamp",
+					"account_name", "account_fakeid",
+					"updated_at",
+				}),
+			}).CreateInBatches(batch, batchSize).Error; err != nil {
 				return fmt.Errorf("failed to batch create articles: %w", err)
 			}
 		}

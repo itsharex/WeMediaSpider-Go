@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"WeMediaSpider/backend/internal/models"
+	"WeMediaSpider/backend/pkg/timeutil"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -76,7 +77,7 @@ func (m *Manager) SaveArticles(accountFakeid string, articles []models.Article) 
 
 	entry := CacheEntry{
 		Data:      data,
-		Timestamp: time.Now().Unix(),
+		Timestamp: timeutil.Now().Unix(),
 	}
 
 	entryData, err := json.Marshal(entry)
@@ -130,7 +131,7 @@ func (m *Manager) SaveAccount(account models.Account) error {
 
 	entry := CacheEntry{
 		Data:      data,
-		Timestamp: time.Now().Unix(),
+		Timestamp: timeutil.Now().Unix(),
 	}
 
 	entryData, err := json.Marshal(entry)
@@ -177,7 +178,7 @@ func (m *Manager) GetAccount(fakeid string) (models.Account, bool) {
 
 // ClearExpired 清除过期缓存
 func (m *Manager) ClearExpired() error {
-	now := time.Now().Unix()
+	now := timeutil.Now().Unix()
 
 	return m.db.Update(func(tx *bolt.Tx) error {
 		// 清除过期文章

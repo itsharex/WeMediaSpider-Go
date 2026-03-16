@@ -9,10 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+	"WeMediaSpider/backend/pkg/timeutil"
 )
 
 // Manager 数据存储管理器
@@ -61,7 +61,7 @@ func (m *Manager) AutoSave(articles []models.Article) (string, error) {
 	}
 
 	// 生成文件名：scrape_YYYYMMDD_HHmmss.json
-	timestamp := time.Now().Format("20060102_150405")
+	timestamp := timeutil.Now().Format("20060102_150405")
 	filename := fmt.Sprintf("scrape_%s.json", timestamp)
 	filepath := filepath.Join(m.dataDir, filename)
 
@@ -79,7 +79,7 @@ func (m *Manager) AutoSave(articles []models.Article) (string, error) {
 	// 构建保存数据
 	data := SavedData{
 		Articles:   articles,
-		SaveTime:   time.Now().Format("2006-01-02 15:04:05"),
+		SaveTime:   timeutil.Now().Format("2006-01-02 15:04:05"),
 		TotalCount: len(articles),
 		Accounts:   accounts,
 	}

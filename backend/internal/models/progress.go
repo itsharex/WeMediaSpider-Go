@@ -19,8 +19,15 @@ type Progress struct {
 
 // AccountStatus 公众号状态
 type AccountStatus struct {
-	AccountName  string `json:"accountName"`  // 公众号名称
-	Status       string `json:"status"`       // 状态
-	Message      string `json:"message"`      // 消息
-	ArticleCount int    `json:"articleCount"` // 文章数
+	AccountName  string            `json:"accountName"`  // 公众号名称
+	Status       string            `json:"status"`       // 状态
+	Message      string            `json:"message"`      // 消息
+	ArticleCount int               `json:"articleCount"` // 文章数
+	Progress     *ProgressInfo     `json:"progress,omitempty"` // 进度信息
+}
+
+// ProgressInfo 进度详情
+type ProgressInfo struct {
+	Current int `json:"current"` // 当前值
+	Total   int `json:"total"`   // 总数
 }

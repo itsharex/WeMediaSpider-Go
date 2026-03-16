@@ -12,6 +12,7 @@ import (
 	"WeMediaSpider/backend/pkg/crypto"
 	"WeMediaSpider/backend/pkg/errors"
 	"WeMediaSpider/backend/pkg/logger"
+	"WeMediaSpider/backend/pkg/timeutil"
 	"WeMediaSpider/backend/pkg/utils"
 
 	"github.com/chromedp/cdproto/network"
@@ -201,15 +202,13 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 	logger.Infof("Cookies数量: %d", len(lm.cookies))
 
 	// 保存缓存
+	lm.loginTime = timeutil.Now().Unix()
 	if err := lm.saveCache(); err != nil {
 		logger.Errorf("保存缓存失败: %v", err)
 		return err
 	}
 
 	logger.Info("登录信息已保存到缓存")
-
-	// 设置登录时间
-	lm.loginTime = time.Now().Unix()
 
 	return nil
 }
@@ -286,7 +285,7 @@ func (lm *LoginManager) saveCache() error {
 	// 如果没有设置登录时间，使用当前时间
 	timestamp := lm.loginTime
 	if timestamp == 0 {
-		timestamp = time.Now().Unix()
+		timestamp = timeutil.Now().Unix()
 	}
 
 	cache := models.LoginCache{
@@ -440,11 +439,16 @@ func (lm *LoginManager) GetStatus() models.LoginStatus {
 		}
 	}
 
-	// 尝试加载缓存获取时间信息
-	if err := lm.loadCache(); err != nil {
-		return models.LoginStatus{
-			IsLoggedIn: false,
-			Message:    "缓存文件不存在或已损坏",
+	// 如果内存中没有登录时间，尝试从缓存加载
+	if lm.loginTime == 0 {
+		if err := lm.loadCache(); err != nil {
+			// 缓存加载失败，但 token 存在，仍然视为已登录
+			logger.Warnf("加载缓存失败: %v，使用内存中的登录状态", err)
+			return models.LoginStatus{
+				IsLoggedIn: true,
+				Token:      lm.token,
+				Message:    "已登录（缓存读取失败）",
+			}
 		}
 	}
 
@@ -506,7 +510,7 @@ func (lm *LoginManager) ExportCredentials() ([]byte, error) {
 	cache := models.LoginCache{
 		Token:     lm.token,
 		Cookies:   lm.cookies,
-		Timestamp: time.Now().Unix(),
+		Timestamp: timeutil.Now().Unix(),
 	}
 
 	// 序列化为 JSON
