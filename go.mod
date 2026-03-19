@@ -15,7 +15,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/wailsapp/wails/v2 v2.11.0
 	github.com/xuri/excelize/v2 v2.10.1
-	go.etcd.io/bbolt v1.4.3
 	golang.org/x/crypto v0.48.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.42.0
