@@ -24,22 +24,17 @@ var (
 	ErrInvalidConfig  = errors.New("无效的配置")
 )
 
-// AppError 应用错误
+// AppError 应用错误（支持 errors.Is/As 穿透）
 type AppError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
+	Cause   error  `json:"-"` // 包装的原始错误，不序列化
 }
 
-func (e *AppError) Error() string {
-	return e.Message
-}
+func (e *AppError) Error() string { return e.Message }
+func (e *AppError) Unwrap() error { return e.Cause }
 
-// NewAppError 创建应用错误
-func NewAppError(code, message, details string) *AppError {
-	return &AppError{
-		Code:    code,
-		Message: message,
-		Details: details,
-	}
+// NewAppError 创建应用错误。cause 为 nil 表示无底层错误。
+func NewAppError(code, message string, cause error) *AppError {
+	return &AppError{Code: code, Message: message, Cause: cause}
 }
