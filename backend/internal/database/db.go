@@ -10,6 +10,7 @@ import (
 	"WeMediaSpider/backend/pkg/timeutil"
 
 	"github.com/glebarez/sqlite"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
@@ -23,7 +24,7 @@ type Database struct {
 // NewDatabase 创建数据库实例
 func NewDatabase(dataDir string) (*Database, error) {
 	dbPath := filepath.Join(dataDir, "wemedia.db")
-	logger.Infof("初始化数据库: %s", dbPath)
+	logger.Log.Info("初始化数据库", zap.String("path", dbPath))
 
 	// 配置 GORM
 	config := &gorm.Config{
@@ -59,7 +60,7 @@ func NewDatabase(dataDir string) (*Database, error) {
 	// 同步模式（NORMAL 平衡性能和安全）
 	db.Exec("PRAGMA synchronous=NORMAL")
 
-	logger.Info("数据库连接成功")
+	logger.Log.Info("数据库连接成功")
 
 	return &Database{
 		DB:     db,
@@ -73,13 +74,13 @@ func (db *Database) Close() error {
 	if err != nil {
 		return err
 	}
-	logger.Info("关闭数据库连接")
+	logger.Log.Info("关闭数据库连接")
 	return sqlDB.Close()
 }
 
 // AutoMigrate 自动迁移表结构
 func (db *Database) AutoMigrate() error {
-	logger.Info("开始自动迁移数据库表结构")
+	logger.Log.Info("开始自动迁移数据库表结构")
 
 	// 迁移表结构
 	if err := db.DB.AutoMigrate(
@@ -100,10 +101,10 @@ func (db *Database) AutoMigrate() error {
 		if err := db.DB.Create(stats).Error; err != nil {
 			return fmt.Errorf("failed to initialize app_stats: %w", err)
 		}
-		logger.Info("初始化应用统计记录")
+		logger.Log.Info("初始化应用统计记录")
 	}
 
-	logger.Info("数据库表结构迁移完成")
+	logger.Log.Info("数据库表结构迁移完成")
 	return nil
 }
 

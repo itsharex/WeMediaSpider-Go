@@ -17,6 +17,7 @@ import (
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
+	"go.uber.org/zap"
 )
 
 // LoginManager 登录管理器
@@ -37,7 +38,7 @@ func NewLoginManager() *LoginManager {
 
 	securityManager, err := crypto.NewSecurityManager(cacheDir)
 	if err != nil {
-		logger.Errorf("Failed to create security manager: %v", err)
+		logger.Log.Error("创建安全管理器失败", zap.Error(err))
 	}
 
 	lm := &LoginManager{
@@ -48,7 +49,7 @@ func NewLoginManager() *LoginManager {
 
 	// 尝试加载缓存
 	if err := lm.loadCache(); err == nil {
-		logger.Info("已从缓存加载登录状态")
+		logger.Log.Info("已从缓存加载登录状态")
 	}
 
 	return lm
@@ -56,26 +57,26 @@ func NewLoginManager() *LoginManager {
 
 // Login 执行登录
 func (lm *LoginManager) Login(ctx context.Context) error {
-	logger.Info("开始登录流程")
+	logger.Log.Info("开始登录流程")
 
 	// 尝试加载缓存
 	if err := lm.loadCache(); err == nil {
 		if lm.validateCache() {
-			logger.Info("使用缓存登录成功")
+			logger.Log.Info("使用缓存登录成功")
 			return nil
 		}
 	}
 
 	// 自动检测浏览器
-	logger.Info("正在检测可用浏览器...")
+	logger.Log.Info("正在检测可用浏览器")
 	browserPath := utils.GetDefaultBrowser()
 
 	if browserPath == "" {
-		logger.Error("未检测到 Chrome 或 Edge 浏览器，请安装其中之一")
+		logger.Log.Error("未检测到 Chrome 或 Edge 浏览器，请安装其中之一")
 		return fmt.Errorf("未检测到可用的浏览器（Chrome 或 Edge）")
 	}
 
-	logger.Info("创建浏览器实例")
+	logger.Log.Info("创建浏览器实例")
 
 	// 创建独立的context，不使用传入的ctx（避免被前端取消）
 	// 设置足够长的超时时间（10分钟，给用户充足时间）
@@ -100,7 +101,7 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 	chromeCtx, chromeCancel := chromedp.NewContext(allocCtx)
 	defer chromeCancel()
 
-	logger.Info("打开微信公众平台登录页面")
+	logger.Log.Info("打开微信公众平台登录页面")
 
 	// 访问登录页面（不等待二维码，直接开始轮询）
 	err := chromedp.Run(chromeCtx,
@@ -108,12 +109,12 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 	)
 
 	if err != nil {
-		logger.Errorf("打开登录页面失败: %v", err)
+		logger.Log.Error("打开登录页面失败", zap.Error(err))
 		return fmt.Errorf("打开登录页面失败: %w", err)
 	}
 
-	logger.Info("页面已打开，请在浏览器窗口中扫码登录...")
-	logger.Info("等待登录完成（最长等待10分钟）...")
+	logger.Log.Info("页面已打开，请在浏览器窗口中扫码登录")
+	logger.Log.Info("等待登录完成（最长等待10分钟）")
 
 	// 等待页面加载
 	time.Sleep(2 * time.Second)
@@ -124,7 +125,7 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 	done := make(chan bool, 1)
 	errChan := make(chan error, 1)
 
-	logger.Info("开始监控登录状态...")
+	logger.Log.Info("开始监控登录状态")
 
 	go func() {
 		for i := 0; i < 600; i++ { // 600秒 = 10分钟
@@ -135,7 +136,7 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 				return
 			case <-chromeCtx.Done():
 				// 浏览器被关闭
-				logger.Warn("检测到浏览器已关闭，登录已取消")
+				logger.Log.Warn("检测到浏览器已关闭，登录已取消")
 				errChan <- fmt.Errorf("登录已取消：浏览器已关闭")
 				return
 			default:
@@ -147,11 +148,11 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 			if err != nil {
 				// 检查是否是因为浏览器关闭导致的错误
 				if chromeCtx.Err() != nil {
-					logger.Warn("检测到浏览器已关闭，登录已取消")
+					logger.Log.Warn("检测到浏览器已关闭，登录已取消")
 					errChan <- fmt.Errorf("登录已取消：浏览器已关闭")
 					return
 				}
-				logger.Debugf("获取 URL 失败: %v", err)
+				logger.Log.Debug("获取 URL 失败", zap.Error(err))
 				time.Sleep(1 * time.Second)
 				continue
 			}
@@ -160,12 +161,12 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 
 			// 打印当前URL用于调试
 			if i == 0 || i%10 == 0 { // 第一次和每10秒打印一次
-				logger.Infof("检查登录状态 [%d/600秒] URL: %s", i, currentURL)
+				logger.Log.Info("检查登录状态", zap.Int("seconds", i), zap.String("url", currentURL))
 			}
 
 			// 检查 URL 是否包含 token
 			if containsString(currentURL, "token=") {
-				logger.Infof("检测到登录成功！URL: %s", currentURL)
+				logger.Log.Info("检测到登录成功", zap.String("url", currentURL))
 				done <- true
 				return
 			}
@@ -181,34 +182,34 @@ func (lm *LoginManager) Login(ctx context.Context) error {
 	case <-done:
 		loginSuccess = true
 	case err := <-errChan:
-		logger.Error(err.Error())
+		logger.Log.Error("登录监控错误", zap.Error(err))
 		return err
 	}
 
 	if !loginSuccess {
-		logger.Error("登录失败")
+		logger.Log.Error("登录失败")
 		return fmt.Errorf("登录失败")
 	}
 
-	logger.Info("正在获取登录信息...")
+	logger.Log.Info("正在获取登录信息")
 
 	// 提取 token 和 cookies
 	if err := lm.extractTokenAndCookies(chromeCtx, currentURL); err != nil {
-		logger.Errorf("提取登录信息失败: %v", err)
+		logger.Log.Error("提取登录信息失败", zap.Error(err))
 		return err
 	}
 
-	logger.Infof("Token: %s", lm.token)
-	logger.Infof("Cookies数量: %d", len(lm.cookies))
+	logger.Log.Info("Token", zap.String("token", lm.token))
+	logger.Log.Info("Cookies数量", zap.Int("count", len(lm.cookies)))
 
 	// 保存缓存
 	lm.loginTime = timeutil.Now().Unix()
 	if err := lm.saveCache(); err != nil {
-		logger.Errorf("保存缓存失败: %v", err)
+		logger.Log.Error("保存缓存失败", zap.Error(err))
 		return err
 	}
 
-	logger.Info("登录信息已保存到缓存")
+	logger.Log.Info("登录信息已保存到缓存")
 
 	return nil
 }
@@ -309,7 +310,7 @@ func (lm *LoginManager) saveCache() error {
 		return fmt.Errorf("failed to save cache: %w", err)
 	}
 
-	logger.Info("登录缓存已加密保存（含完整性校验）")
+	logger.Log.Info("登录缓存已加密保存（含完整性校验）")
 	return nil
 }
 
@@ -325,16 +326,16 @@ func (lm *LoginManager) loadCache() error {
 	var cache models.LoginCache
 	if err := json.Unmarshal(fileData, &cache); err == nil {
 		// 是旧的明文格式，加载后重新加密保存
-		logger.Warn("检测到明文登录缓存，正在转换为加密格式...")
+		logger.Log.Warn("检测到明文登录缓存，正在转换为加密格式")
 		lm.token = cache.Token
 		lm.cookies = cache.Cookies
 		lm.loginTime = cache.Timestamp
 
 		// 重新加密保存
 		if saveErr := lm.saveCache(); saveErr != nil {
-			logger.Errorf("转换加密格式失败: %v", saveErr)
+			logger.Log.Error("转换加密格式失败", zap.Error(saveErr))
 		} else {
-			logger.Info("已成功转换为加密格式（含完整性校验）")
+			logger.Log.Info("已成功转换为加密格式（含完整性校验）")
 		}
 
 		// 检查是否过期
@@ -355,7 +356,7 @@ func (lm *LoginManager) loadCache() error {
 	if err != nil {
 		// 如果 HMAC 验证失败，可能是旧的加密格式（无HMAC）
 		// 尝试直接解密
-		logger.Warn("HMAC验证失败，尝试旧加密格式...")
+		logger.Log.Warn("HMAC验证失败，尝试旧加密格式")
 
 		masterKey, keyErr := lm.securityManager.GetKeyManager().GetMasterKey()
 		if keyErr != nil {
@@ -369,7 +370,7 @@ func (lm *LoginManager) loadCache() error {
 		}
 
 		// 成功解密旧格式，重新保存为新格式（含HMAC）
-		logger.Info("检测到旧加密格式，正在升级...")
+		logger.Log.Info("检测到旧加密格式，正在升级")
 		if err := json.Unmarshal(decryptedData, &cache); err != nil {
 			return fmt.Errorf("failed to unmarshal cache: %w", err)
 		}
@@ -380,9 +381,9 @@ func (lm *LoginManager) loadCache() error {
 
 		// 重新保存为新格式
 		if saveErr := lm.saveCache(); saveErr != nil {
-			logger.Errorf("升级加密格式失败: %v", saveErr)
+			logger.Log.Error("升级加密格式失败", zap.Error(saveErr))
 		} else {
-			logger.Info("已成功升级为新加密格式（含完整性校验）")
+			logger.Log.Info("已成功升级为新加密格式（含完整性校验）")
 		}
 
 		// 检查是否过期
@@ -443,7 +444,7 @@ func (lm *LoginManager) GetStatus() models.LoginStatus {
 	if lm.loginTime == 0 {
 		if err := lm.loadCache(); err != nil {
 			// 缓存加载失败，但 token 存在，仍然视为已登录
-			logger.Warnf("加载缓存失败: %v，使用内存中的登录状态", err)
+			logger.Log.Warn("加载缓存失败，使用内存中的登录状态", zap.Error(err))
 			return models.LoginStatus{
 				IsLoggedIn: true,
 				Token:      lm.token,
@@ -558,7 +559,7 @@ func (lm *LoginManager) ImportCredentials(encryptedDataWithHMAC []byte) error {
 	valid, err := lm.securityManager.VerifyHMAC(encryptedData, expectedHMAC)
 	if err != nil {
 		// 如果 HMAC 验证失败，可能是旧格式（无HMAC）
-		logger.Warn("HMAC验证失败，尝试旧格式导入...")
+		logger.Log.Warn("HMAC验证失败，尝试旧格式导入")
 		encryptedData = encryptedDataWithHMAC // 使用完整数据
 	} else if !valid {
 		return fmt.Errorf("完整性校验失败：凭证文件可能已被篡改")
@@ -605,10 +606,10 @@ func (lm *LoginManager) ImportCredentials(encryptedDataWithHMAC []byte) error {
 
 	// 保存到本地缓存
 	if err := lm.saveCache(); err != nil {
-		logger.Errorf("保存凭证到缓存失败: %v", err)
+		logger.Log.Error("保存凭证到缓存失败", zap.Error(err))
 		return fmt.Errorf("保存凭证失败: %w", err)
 	}
 
-	logger.Info("登录凭证导入成功")
+	logger.Log.Info("登录凭证导入成功")
 	return nil
 }

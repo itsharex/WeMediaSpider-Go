@@ -13,6 +13,8 @@ import (
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
 	"WeMediaSpider/backend/pkg/timeutil"
+
+	"go.uber.org/zap"
 )
 
 // DataManager 数据管理器
@@ -26,18 +28,18 @@ func NewDataManager() *DataManager {
 	// 获取用户主目录
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		logger.Errorf("Failed to get home directory: %v", err)
+		logger.Log.Error("无法获取用户主目录", zap.Error(err))
 		homeDir = "."
 	}
 
 	// 创建配置目录 C:\Users\用户名\.wemediaspider
 	configDir := filepath.Join(homeDir, ".wemediaspider")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		logger.Errorf("Failed to create config directory: %v", err)
+		logger.Log.Error("无法创建配置目录", zap.Error(err))
 	}
 
 	dataPath := filepath.Join(configDir, "appdata.json")
-	logger.Infof("数据文件路径: %s", dataPath)
+	logger.Log.Info("数据文件路径", zap.String("path", dataPath))
 
 	return &DataManager{
 		dataPath: dataPath,
@@ -74,7 +76,11 @@ func (m *DataManager) LoadData() (models.AppData, error) {
 		data.TodayArticles = 0
 	}
 
-	logger.Infof("加载应用数据: 文章=%d, 公众号=%d, 今日文章=%d", data.TotalArticles, data.TotalAccounts, data.TodayArticles)
+	logger.Log.Info("加载应用数据",
+		zap.Int("articles", data.TotalArticles),
+		zap.Int("accounts", data.TotalAccounts),
+		zap.Int("today", data.TodayArticles),
+	)
 	return data, nil
 }
 
@@ -84,7 +90,7 @@ func (m *DataManager) SaveData(data models.AppData) error {
 	defer m.mu.Unlock()
 
 	// 序列化为 JSON
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -94,19 +100,24 @@ func (m *DataManager) SaveData(data models.AppData) error {
 		return err
 	}
 
-	logger.Infof("保存应用数据: 文章=%d, 公众号=%d", data.TotalArticles, data.TotalAccounts)
+	logger.Log.Info("保存应用数据",
+		zap.Int("articles", data.TotalArticles),
+		zap.Int("accounts", data.TotalAccounts),
+	)
 	return nil
 }
 
-// UpdateArticleStats 更新文章统计
-func (m *DataManager) UpdateArticleStats(articles []models.Article) error {
+// UpdateStats 更新统计数据
+func (m *DataManager) UpdateStats(articles []models.Article) error {
+	if len(articles) == 0 {
+		return nil
+	}
+
 	data, err := m.LoadData()
 	if err != nil {
-		logger.Errorf("Failed to load data: %v", err)
 		data = models.AppData{}
 	}
 
-	// 更新统计
 	data.TotalArticles = len(articles)
 
 	// 统计公众号

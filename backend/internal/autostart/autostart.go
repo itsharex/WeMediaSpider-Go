@@ -10,6 +10,8 @@ import (
 
 	"WeMediaSpider/backend/pkg/logger"
 
+	"go.uber.org/zap"
+
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -82,7 +84,7 @@ func (m *Manager) Enable(silent bool) error {
 		return fmt.Errorf("failed to set registry value: %w", err)
 	}
 
-	logger.Infof("Autostart enabled (silent: %v)", silent)
+	logger.Log.Info("Autostart enabled", zap.Bool("silent", silent))
 	return nil
 }
 
@@ -102,7 +104,7 @@ func (m *Manager) Disable() error {
 		return fmt.Errorf("failed to delete registry value: %w", err)
 	}
 
-	logger.Info("Autostart disabled")
+	logger.Log.Info("Autostart disabled")
 	return nil
 }
 

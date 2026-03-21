@@ -6,6 +6,8 @@ import (
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // JSONExporter JSON 导出器
@@ -13,11 +15,11 @@ type JSONExporter struct{}
 
 // Export 导出为 JSON
 func (e *JSONExporter) Export(articles []models.Article, filename string) error {
-	logger.Infof("📊 开始导出 JSON 文件: %s (文章数: %d)", filename, len(articles))
+	logger.Log.Info("开始导出 JSON 文件", zap.String("file", filename), zap.Int("count", len(articles)))
 
 	file, err := os.Create(filename)
 	if err != nil {
-		logger.Errorf("❌ 创建 JSON 文件失败: %v", err)
+		logger.Log.Error("创建 JSON 文件失败", zap.String("file", filename), zap.Error(err))
 		return err
 	}
 	defer file.Close()
@@ -26,13 +28,11 @@ func (e *JSONExporter) Export(articles []models.Article, filename string) error 
 	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
 
-	logger.Infof("📝 正在编码 JSON 数据...")
-
 	if err := encoder.Encode(articles); err != nil {
-		logger.Errorf("❌ 编码 JSON 数据失败: %v", err)
+		logger.Log.Error("编码 JSON 数据失败", zap.Error(err))
 		return err
 	}
 
-	logger.Infof("✅ JSON 文件导出成功: %s", filename)
+	logger.Log.Info("JSON 文件导出成功", zap.String("file", filename))
 	return nil
 }

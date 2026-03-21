@@ -16,13 +16,14 @@ import (
 	"WeMediaSpider/backend/pkg/timeutil"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
 	// 启动 NTP 时间同步（对齐中国时间）
-	logger.Info("Starting NTP time synchronization with China time server...")
+	logger.Log.Info("启动 NTP 时间同步")
 	timeutil.StartAutoSync()
 
 	// 延迟初始化系统托盘，避免启动时的竞态条件
@@ -35,7 +36,7 @@ func (a *App) Startup(ctx context.Context) {
 		var iconData []byte
 		if len(embeddedIcon) > 0 {
 			iconData = embeddedIcon
-			logger.Info("Using embedded tray icon")
+			logger.Log.Info("使用嵌入式托盘图标")
 		} else {
 			// 回退：尝试从文件系统加载
 			iconPaths := []string{
@@ -47,12 +48,12 @@ func (a *App) Startup(ctx context.Context) {
 				data, err := os.ReadFile(path)
 				if err == nil {
 					iconData = data
-					logger.Infof("Loaded tray icon from: %s", path)
+					logger.Log.Info("从文件加载托盘图标", zap.String("path", path))
 					break
 				}
 			}
 			if iconData == nil {
-				logger.Warnf("Failed to load tray icon, using default")
+				logger.Log.Warn("托盘图标加载失败，使用默认图标")
 			}
 		}
 
@@ -63,7 +64,7 @@ func (a *App) Startup(ctx context.Context) {
 	}()
 
 	// 输出当前系统配置状态
-	logger.Infof("Application started - CloseToTray: %v, RememberChoice: %v", a.closeToTray, a.rememberChoice)
+	logger.Log.Info("应用已启动", zap.Bool("close_to_tray", a.closeToTray), zap.Bool("remember_choice", a.rememberChoice))
 
 	// 启动定时任务管理器
 	if a.cronManager != nil {
@@ -88,7 +89,7 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.db != nil {
 		a.db.Close()
 	}
-	logger.Info("Application shutdown")
+	logger.Log.Info("应用已关闭")
 }
 
 // ============================================================
@@ -108,7 +109,7 @@ func (a *App) ShowWindow() {
 // SetCloseToTray 设置关闭到托盘
 func (a *App) SetCloseToTray(enabled bool) {
 	a.closeToTray = enabled
-	logger.Infof("Close to tray: %v", enabled)
+	logger.Log.Info("关闭到托盘设置已更新", zap.Bool("enabled", enabled))
 
 	// 保存到配置文件
 	a.saveSystemConfig()
@@ -130,7 +131,7 @@ func (a *App) GetCloseToTray() bool {
 // SetRememberChoice 设置是否记住用户选择
 func (a *App) SetRememberChoice(remember bool) {
 	a.rememberChoice = remember
-	logger.Infof("Remember choice: %v", remember)
+	logger.Log.Info("记住选择设置已更新", zap.Bool("remember", remember))
 
 	// 保存到配置文件
 	a.saveSystemConfig()
@@ -151,56 +152,47 @@ func (a *App) GetRememberChoice() bool {
 
 // GetUpdateIgnoredDate 获取更新忽略日期
 func (a *App) GetUpdateIgnoredDate() string {
-	logger.Infof("[GetUpdateIgnoredDate] Returning: %s", a.updateIgnoredDate)
+	logger.Log.Info("获取更新忽略日期", zap.String("date", a.updateIgnoredDate))
 	return a.updateIgnoredDate
 }
 
 // SetUpdateIgnoredDate 设置更新忽略日期
 func (a *App) SetUpdateIgnoredDate(date string) {
-	logger.Infof("[SetUpdateIgnoredDate] Called with date: %s", date)
+	logger.Log.Info("设置更新忽略日期", zap.String("date", date))
 	a.updateIgnoredDate = date
-	logger.Infof("[SetUpdateIgnoredDate] Updated field to: %s", a.updateIgnoredDate)
 
 	// 保存到配置文件
-	logger.Infof("[SetUpdateIgnoredDate] Calling saveSystemConfig")
 	a.saveSystemConfig()
-	logger.Infof("[SetUpdateIgnoredDate] saveSystemConfig completed")
 
 	// 发送配置更新事件到前端
 	if a.ctx != nil {
-		logger.Infof("[SetUpdateIgnoredDate] Emitting system-config-changed event")
 		runtime.EventsEmit(a.ctx, "system-config-changed", map[string]interface{}{
 			"closeToTray":       a.closeToTray,
 			"rememberChoice":    a.rememberChoice,
 			"updateIgnoredDate": a.updateIgnoredDate,
 		})
 	} else {
-		logger.Warnf("[SetUpdateIgnoredDate] ctx is nil, cannot emit event")
+		logger.Log.Warn("ctx 为空，无法发送事件")
 	}
-	logger.Infof("[SetUpdateIgnoredDate] Completed")
 }
 
 // saveSystemConfig 保存系统配置到文件
 func (a *App) saveSystemConfig() {
-	logger.Infof("[saveSystemConfig] Called")
 	if a.systemConfigManager == nil {
-		logger.Warnf("[saveSystemConfig] systemConfigManager is nil, cannot save")
+		logger.Log.Warn("系统配置管理器未初始化，无法保存")
 		return
 	}
 
-	config := config.SystemConfig{
+	cfg := config.SystemConfig{
 		CloseToTray:       a.closeToTray,
 		RememberChoice:    a.rememberChoice,
 		UpdateIgnoredDate: a.updateIgnoredDate,
 	}
 
-	logger.Infof("[saveSystemConfig] Saving config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
-		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
-
-	if err := a.systemConfigManager.Save(config); err != nil {
-		logger.Errorf("[saveSystemConfig] Failed to save system config: %v", err)
+	if err := a.systemConfigManager.Save(cfg); err != nil {
+		logger.Log.Error("保存系统配置失败", zap.Error(err))
 	} else {
-		logger.Infof("[saveSystemConfig] Successfully saved system config")
+		logger.Log.Info("系统配置已保存", zap.Bool("close_to_tray", cfg.CloseToTray), zap.Bool("remember_choice", cfg.RememberChoice), zap.String("update_ignored_date", cfg.UpdateIgnoredDate))
 	}
 }
 
@@ -256,20 +248,33 @@ func (a *App) GetAppVersion() string {
 }
 
 // VersionInfo 版本信息
+type VersionInfo struct {
+	CurrentVersion string `json:"currentVersion"`
+	LatestVersion  string `json:"latestVersion"`
+	HasUpdate      bool   `json:"hasUpdate"`
+	UpdateURL      string `json:"updateUrl"`
+	ReleaseNotes   string `json:"releaseNotes"`
+}
 
 // updateCache 更新检查缓存
+type updateCache struct {
+	Version      string    `json:"version"`
+	UpdateURL    string    `json:"updateUrl"`
+	ReleaseNotes string    `json:"releaseNotes"`
+	CheckedAt    time.Time `json:"checkedAt"`
+}
 
 // CheckForUpdates 检查更新
 func (a *App) CheckForUpdates() (VersionInfo, error) {
 	currentVersion := a.GetAppVersion()
-	logger.Infof("开始检查更新，当前版本: %s", currentVersion)
+	logger.Log.Info("开始检查更新", zap.String("current_version", currentVersion))
 
 	// 先检查缓存（24小时内有效）
 	cacheFile := filepath.Join(os.TempDir(), "wemediaspider_update_cache.json")
 	if cached, ok := a.loadUpdateCache(cacheFile); ok {
 		cacheAge := time.Since(cached.CheckedAt)
 		if cacheAge < 24*time.Hour {
-			logger.Infof("使用缓存的更新信息（缓存时间: %v）", cacheAge)
+			logger.Log.Info("使用缓存的更新信息", zap.Duration("cache_age", cacheAge))
 			hasUpdate := compareVersions(cached.Version, currentVersion) > 0
 			return VersionInfo{
 				CurrentVersion: currentVersion,
@@ -279,7 +284,7 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 				ReleaseNotes:   cached.ReleaseNotes,
 			}, nil
 		}
-		logger.Info("缓存已过期，重新检查")
+		logger.Log.Info("更新缓存已过期，重新检查")
 	}
 
 	// 多源并发检查：同时请求所有源，取最快成功的结果
@@ -303,10 +308,10 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 		go func(name string, fn func() (string, string, string, error)) {
 			ver, url, notes, err := fn()
 			if err != nil {
-				logger.Warnf("%s 检查失败: %v", name, err)
+				logger.Log.Warn("更新源检查失败", zap.String("source", name), zap.Error(err))
 				return
 			}
-			logger.Infof("%s 检查成功: version=%s", name, ver)
+			logger.Log.Info("更新源检查成功", zap.String("source", name), zap.String("version", ver))
 			select {
 			case resultCh <- updateResult{ver, url, notes}:
 			default:
@@ -326,7 +331,7 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 		})
 
 		hasUpdate := compareVersions(r.version, currentVersion) > 0
-		logger.Infof("当前版本: %s, 最新版本: %s, 有更新: %v", currentVersion, r.version, hasUpdate)
+		logger.Log.Info("版本检查完成", zap.String("current", currentVersion), zap.String("latest", r.version), zap.Bool("has_update", hasUpdate))
 		return VersionInfo{
 			CurrentVersion: currentVersion,
 			LatestVersion:  r.version,
@@ -336,7 +341,7 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 		}, nil
 
 	case <-time.After(15 * time.Second):
-		logger.Warn("所有更新源均超时")
+		logger.Log.Warn("所有更新源均超时")
 		return VersionInfo{
 			CurrentVersion: currentVersion,
 			LatestVersion:  currentVersion,
@@ -347,28 +352,28 @@ func (a *App) CheckForUpdates() (VersionInfo, error) {
 
 // checkUpdateViaCDN 通过 jsdelivr CDN 检查更新
 func (a *App) checkUpdateViaCDN() (version, updateURL, releaseNotes string, err error) {
-	logger.Info("尝试通过 CDN 检查更新")
+	logger.Log.Info("通过 CDN 检查更新")
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
 	// 使用 jsdelivr 获取 releases 信息（使用正确的 URL 格式）
 	cdnURL := "https://cdn.jsdelivr.net/gh/vag-Zhao/WeMediaSpider-Go@main/version.json"
-	logger.Infof("CDN URL: %s", cdnURL)
+	logger.Log.Info("CDN 请求地址", zap.String("url", cdnURL))
 	req, err := http.NewRequest("GET", cdnURL, nil)
 	if err != nil {
-		logger.Errorf("创建 CDN 请求失败: %v", err)
+		logger.Log.Error("创建 CDN 请求失败", zap.Error(err))
 		return "", "", "", err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Errorf("CDN 请求失败: %v", err)
+		logger.Log.Error("CDN 请求失败", zap.Error(err))
 		return "", "", "", err
 	}
 	defer resp.Body.Close()
 
-	logger.Infof("CDN 响应状态码: %d", resp.StatusCode)
+	logger.Log.Info("CDN 响应状态码", zap.Int("status", resp.StatusCode))
 	if resp.StatusCode != 200 {
 		return "", "", "", fmt.Errorf("CDN 返回状态码: %d", resp.StatusCode)
 	}
@@ -380,11 +385,11 @@ func (a *App) checkUpdateViaCDN() (version, updateURL, releaseNotes string, err 
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&versionInfo); err != nil {
-		logger.Errorf("解析 CDN 响应失败: %v", err)
+		logger.Log.Error("解析 CDN 响应失败", zap.Error(err))
 		return "", "", "", err
 	}
 
-	logger.Infof("CDN 返回版本信息: version=%s, updateUrl=%s", versionInfo.Version, versionInfo.UpdateURL)
+	logger.Log.Info("CDN 返回版本信息", zap.String("version", versionInfo.Version), zap.String("update_url", versionInfo.UpdateURL))
 
 	return strings.TrimPrefix(versionInfo.Version, "v"),
 		versionInfo.UpdateURL,
@@ -463,10 +468,10 @@ func (a *App) ClearUpdateCache() error {
 	cacheFile := filepath.Join(os.TempDir(), "wemediaspider_update_cache.json")
 	err := os.Remove(cacheFile)
 	if err != nil && !os.IsNotExist(err) {
-		logger.Warnf("清除更新缓存失败: %v", err)
+		logger.Log.Warn("清除更新缓存失败", zap.Error(err))
 		return err
 	}
-	logger.Info("更新缓存已清除")
+	logger.Log.Info("更新缓存已清除")
 	return nil
 }
 
@@ -489,12 +494,12 @@ func (a *App) loadUpdateCache(cacheFile string) (updateCache, bool) {
 func (a *App) saveUpdateCache(cacheFile string, cache updateCache) {
 	data, err := json.Marshal(cache)
 	if err != nil {
-		logger.Warnf("保存更新缓存失败: %v", err)
+		logger.Log.Warn("序列化更新缓存失败", zap.Error(err))
 		return
 	}
 
 	if err := os.WriteFile(cacheFile, data, 0644); err != nil {
-		logger.Warnf("写入更新缓存失败: %v", err)
+		logger.Log.Warn("写入更新缓存文件失败", zap.Error(err))
 	}
 }
 

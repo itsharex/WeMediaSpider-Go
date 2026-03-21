@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // SystemConfig 系统配置
@@ -50,7 +52,7 @@ func (m *SystemConfigManager) Load() (SystemConfig, error) {
 	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
 		// 文件不存在，保存默认配置
 		if err := m.Save(defaultConfig); err != nil {
-			logger.Warnf("Failed to save default system config: %v", err)
+			logger.Log.Warn("保存默认系统配置失败", zap.Error(err))
 		}
 		return defaultConfig, nil
 	}
@@ -58,19 +60,22 @@ func (m *SystemConfigManager) Load() (SystemConfig, error) {
 	// 读取文件
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
-		logger.Warnf("Failed to read system config: %v", err)
+		logger.Log.Warn("读取系统配置失败", zap.Error(err))
 		return defaultConfig, nil
 	}
 
 	// 解析 JSON
 	var config SystemConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		logger.Warnf("Failed to parse system config: %v", err)
+		logger.Log.Warn("解析系统配置失败", zap.Error(err))
 		return defaultConfig, nil
 	}
 
-	logger.Infof("Loaded system config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
-		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
+	logger.Log.Info("已加载系统配置",
+		zap.Bool("close_to_tray", config.CloseToTray),
+		zap.Bool("remember_choice", config.RememberChoice),
+		zap.String("update_ignored_date", config.UpdateIgnoredDate),
+	)
 	return config, nil
 }
 
@@ -93,7 +98,10 @@ func (m *SystemConfigManager) Save(config SystemConfig) error {
 		return err
 	}
 
-	logger.Infof("Saved system config: closeToTray=%v, rememberChoice=%v, updateIgnoredDate=%s",
-		config.CloseToTray, config.RememberChoice, config.UpdateIgnoredDate)
+	logger.Log.Info("已保存系统配置",
+		zap.Bool("close_to_tray", config.CloseToTray),
+		zap.Bool("remember_choice", config.RememberChoice),
+		zap.String("update_ignored_date", config.UpdateIgnoredDate),
+	)
 	return nil
 }

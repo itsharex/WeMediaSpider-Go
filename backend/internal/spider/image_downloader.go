@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // ImageInfo 图片信息
@@ -107,7 +109,7 @@ func (d *ImageDownloader) ExtractImages(content string) []ImageInfo {
 		images[i].Filename = fmt.Sprintf("%d%s", i+1, d.getExtension(images[i].URL))
 	}
 
-	logger.Infof("从内容中提取到 %d 张图片", len(images))
+	logger.Log.Info("从内容中提取到图片", zap.Int("count", len(images)))
 	return images
 }
 
@@ -124,7 +126,7 @@ func (d *ImageDownloader) DownloadImagesWithProgress(
 		return nil
 	}
 
-	logger.Infof("开始下载 %d 张图片,并发数: %d", len(images), maxWorkers)
+	logger.Log.Info("开始下载图片", zap.Int("count", len(images)), zap.Int("workers", maxWorkers))
 
 	// 按公众号和文章标题分组
 	type articleKey struct {
@@ -175,7 +177,7 @@ func (d *ImageDownloader) DownloadImagesWithProgress(
 
 				if err != nil {
 					progress.Message = fmt.Sprintf("下载失败: %s", task.image.Filename)
-					logger.Errorf("下载图片失败 %s: %v", task.image.URL, err)
+					logger.Log.Error("下载图片失败", zap.String("url", task.image.URL), zap.Error(err))
 				} else {
 					progress.Message = fmt.Sprintf("已下载: %s/%s/%s", task.image.AccountName, task.image.ArticleTitle, task.image.Filename)
 				}
@@ -197,7 +199,7 @@ func (d *ImageDownloader) DownloadImagesWithProgress(
 			articleDir := filepath.Join(accountDir, sanitizeFolderName(key.articleTitle))
 
 			if err := os.MkdirAll(articleDir, 0755); err != nil {
-				logger.Errorf("创建目录失败 %s: %v", articleDir, err)
+				logger.Log.Error("创建目录失败", zap.String("dir", articleDir), zap.Error(err))
 				continue
 			}
 
@@ -229,7 +231,7 @@ func (d *ImageDownloader) DownloadImagesWithProgress(
 		}
 	}
 
-	logger.Infof("图片下载完成")
+	logger.Log.Info("图片下载完成")
 	return nil
 }
 

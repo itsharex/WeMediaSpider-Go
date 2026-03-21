@@ -14,6 +14,8 @@ import (
 	"WeMediaSpider/backend/pkg/logger"
 	"WeMediaSpider/backend/pkg/utils"
 
+	"go.uber.org/zap"
+
 	"github.com/PuerkitoBio/goquery"
 	md "github.com/JohannesKaufmann/html-to-markdown"
 )
@@ -150,7 +152,7 @@ func (s *Scraper) GetArticlesList(ctx context.Context, fakeid string, page int) 
 	if len(s.token) > 10 {
 		tokenPreview = s.token[:10] + "..."
 	}
-	logger.Infof("请求文章列表: fakeid=%s page=%d token=%s", fakeid, page, tokenPreview)
+	logger.Log.Info("请求文章列表", zap.String("fakeid", fakeid), zap.Int("page", page), zap.String("token", tokenPreview))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL+"?"+params.Encode(), nil)
 	if err != nil {
@@ -163,7 +165,7 @@ func (s *Scraper) GetArticlesList(ctx context.Context, fakeid string, page int) 
 	}
 	req.Header.Set("User-Agent", utils.GetRandomUserAgent())
 
-	logger.Infof("请求头: %+v", s.headers)
+	logger.Log.Debug("请求头", zap.Any("headers", s.headers))
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -176,7 +178,7 @@ func (s *Scraper) GetArticlesList(ctx context.Context, fakeid string, page int) 
 		return nil, err
 	}
 
-	logger.Infof("响应状态: %d 响应体: %s", resp.StatusCode, string(body))
+	logger.Log.Debug("响应状态", zap.Int("status", resp.StatusCode), zap.String("body", string(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +219,7 @@ func (s *Scraper) GetArticlesList(ctx context.Context, fakeid string, page int) 
 	if err != nil {
 		// 如果加载失败，使用固定时区 UTC+8
 		chinaLoc = time.FixedZone("CST", 8*3600)
-		logger.Warnf("无法加载 Asia/Shanghai 时区，使用固定 UTC+8: %v", err)
+		logger.Log.Warn("无法加载 Asia/Shanghai 时区，使用固定 UTC+8", zap.Error(err))
 	}
 	for _, item := range result.AppMsgList {
 		// 将 Unix 时间戳转换为中国时区的时间
@@ -248,7 +250,7 @@ func (s *Scraper) GetArticleContent(ctx context.Context, link string) (string, e
 		// 如果是重试,使用较短的退避（因为频率限制器已经在自适应调整）
 		if attempt > 0 {
 			backoff := time.Duration(2*(attempt+1)) * time.Second
-			logger.Infof("重试获取文章内容 (尝试 %d/%d)，等待 %v", attempt+1, maxRetries, backoff)
+			logger.Log.Info("重试获取文章内容", zap.Int("attempt", attempt+1), zap.Int("max", maxRetries), zap.Duration("backoff", backoff))
 			time.Sleep(backoff)
 		}
 
@@ -262,7 +264,7 @@ func (s *Scraper) GetArticleContent(ctx context.Context, link string) (string, e
 		// 失败，记录到频率限制器
 		s.rateLimiter.RecordFailure()
 		lastErr = err
-		logger.Warnf("获取文章内容失败 (尝试 %d/%d): %v", attempt+1, maxRetries, err)
+		logger.Log.Warn("获取文章内容失败", zap.Int("attempt", attempt+1), zap.Int("max", maxRetries), zap.Error(err))
 	}
 
 	return "", fmt.Errorf("获取文章内容失败，已重试 %d 次: %w", maxRetries, lastErr)
@@ -282,31 +284,31 @@ func (s *Scraper) getArticleContentOnce(ctx context.Context, link string) (strin
 	req.Header.Set("User-Agent", utils.GetRandomUserAgent())
 	req.Header.Set("Referer", "https://mp.weixin.qq.com/")
 
-	logger.Infof("正在请求文章内容: %s", link)
+	logger.Log.Info("正在请求文章内容", zap.String("link", link))
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		logger.Errorf("请求文章失败: %v", err)
+		logger.Log.Error("请求文章失败", zap.Error(err))
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	logger.Infof("文章响应状态码: %d", resp.StatusCode)
+	logger.Log.Debug("文章响应状态码", zap.Int("status", resp.StatusCode))
 
 	// 读取响应体用于调试
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Errorf("读取响应体失败: %v", err)
+		logger.Log.Error("读取响应体失败", zap.Error(err))
 		return "", err
 	}
 
 	// 检查响应内容长度
-	logger.Infof("响应体长度: %d bytes", len(bodyBytes))
+	logger.Log.Debug("响应体长度", zap.Int("bytes", len(bodyBytes)))
 
 	// 从字节创建 goquery 文档
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(bodyBytes)))
 	if err != nil {
-		logger.Errorf("解析HTML失败: %v", err)
+		logger.Log.Error("解析HTML失败", zap.Error(err))
 		return "", err
 	}
 
@@ -319,45 +321,44 @@ func (s *Scraper) getArticleContentOnce(ctx context.Context, link string) (strin
 	if content.Length() > 0 {
 		contentHTML, err = content.Html()
 		if err == nil && strings.TrimSpace(contentHTML) != "" {
-			logger.Infof("使用 #js_content 选择器成功，内容长度: %d", len(contentHTML))
+			logger.Log.Debug("使用 #js_content 选择器成功", zap.Int("length", len(contentHTML)))
 		}
 	}
 
 	// 如果 #js_content 为空，尝试其他选择器
 	if strings.TrimSpace(contentHTML) == "" {
-		logger.Warnf("#js_content 为空，尝试其他选择器...")
+		logger.Log.Debug("#js_content 为空，尝试其他选择器")
 
 		// 尝试 .rich_media_content
 		content = doc.Find(".rich_media_content")
 		if content.Length() > 0 {
 			contentHTML, err = content.Html()
 			if err == nil && strings.TrimSpace(contentHTML) != "" {
-				logger.Infof("使用 .rich_media_content 选择器成功，内容长度: %d", len(contentHTML))
+				logger.Log.Debug("使用 .rich_media_content 选择器成功", zap.Int("length", len(contentHTML)))
 			}
 		}
 	}
 
 	// 如果还是为空，尝试 article 标签
 	if strings.TrimSpace(contentHTML) == "" {
-		logger.Warnf(".rich_media_content 为空，尝试 article 标签...")
+		logger.Log.Debug(".rich_media_content 为空，尝试 article 标签")
 		content = doc.Find("article")
 		if content.Length() > 0 {
 			contentHTML, err = content.Html()
 			if err == nil && strings.TrimSpace(contentHTML) != "" {
-				logger.Infof("使用 article 选择器成功，内容长度: %d", len(contentHTML))
+				logger.Log.Debug("使用 article 选择器成功", zap.Int("length", len(contentHTML)))
 			}
 		}
 	}
 
 	// 如果所有选择器都失败，记录HTML片段用于调试
 	if strings.TrimSpace(contentHTML) == "" {
-		logger.Errorf("所有内容选择器都失败")
-		// 记录HTML的前1000个字符用于调试
-		htmlPreview := string(bodyBytes)
-		if len(htmlPreview) > 1000 {
-			htmlPreview = htmlPreview[:1000]
-		}
-		logger.Errorf("HTML预览: %s", htmlPreview)
+		logger.Log.Error("所有内容选择器都失败", zap.String("html_preview", func() string {
+			if len(bodyBytes) > 1000 {
+				return string(bodyBytes[:1000])
+			}
+			return string(bodyBytes)
+		}()))
 		return "", fmt.Errorf("无法提取文章内容，所有选择器都返回空")
 	}
 
@@ -371,35 +372,35 @@ func (s *Scraper) getArticleContentOnce(ctx context.Context, link string) (strin
 			// 将真实图片URL设置到 src 属性
 			img.SetAttr("src", cleanURL)
 			imageCount++
-			logger.Infof("处理图片 %d: %s", imageCount, cleanURL)
+			logger.Log.Debug("处理图片", zap.Int("index", imageCount), zap.String("url", cleanURL))
 		} else if src, exists := img.Attr("src"); exists && strings.HasPrefix(src, "data:") {
 			// 如果 src 是占位符（data: 协议），尝试从其他属性获取真实URL
 			if originalSrc, exists := img.Attr("data-original-src"); exists && originalSrc != "" {
 				cleanURL := strings.Split(originalSrc, "#")[0]
 				img.SetAttr("src", cleanURL)
 				imageCount++
-				logger.Infof("处理图片 %d: %s (来自 data-original-src)", imageCount, cleanURL)
+				logger.Log.Debug("处理图片(data-original-src)", zap.Int("index", imageCount), zap.String("url", cleanURL))
 			}
 		}
 	})
 
-	logger.Infof("共处理 %d 张图片", imageCount)
+	logger.Log.Debug("图片处理完成", zap.Int("count", imageCount))
 
 	// 重新获取处理后的HTML
 	contentHTML, err = content.Html()
 	if err != nil {
-		logger.Errorf("获取处理后的HTML失败: %v", err)
+		logger.Log.Error("获取处理后的HTML失败", zap.Error(err))
 		return "", err
 	}
 
 	// 转换为 Markdown
 	markdown, err := s.converter.ConvertString(contentHTML)
 	if err != nil {
-		logger.Errorf("转换为Markdown失败: %v", err)
+		logger.Log.Error("转换为Markdown失败", zap.Error(err))
 		return "", err
 	}
 
-	logger.Infof("成功转换为Markdown，长度: %d", len(markdown))
+	logger.Log.Debug("成功转换为Markdown", zap.Int("length", len(markdown)))
 	return markdown, nil
 }
 

@@ -275,10 +275,10 @@ const ResultsPage: React.FC = () => {
       const filesWithArticles = await Promise.all(
         (files || []).map(async (file: any) => {
           try {
-            const articles = await (window as any).go.app.App.LoadDataFile(file.filepath)
+            const articles = await (window as any).go.app.App.LoadDataFile(file.filePath)
             return { ...file, articles: articles || [] }
           } catch (error) {
-            console.error('Failed to load articles for file:', file.filepath, error)
+            console.error('Failed to load articles for file:', file.filePath, error)
             return { ...file, articles: [] }
           }
         })
@@ -1086,7 +1086,7 @@ const ResultsPage: React.FC = () => {
           >
             {dataFiles.map((file: any) => (
               <Panel
-                key={file.filepath}
+                key={file.filePath}
                 header={
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
                     {/* 图标 */}
@@ -1123,7 +1123,7 @@ const ResultsPage: React.FC = () => {
                         icon={<ImportOutlined />}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleImportData(file.filepath, 'replace')
+                          handleImportData(file.filePath, 'replace')
                         }}
                         loading={loadingData}
                       >
@@ -1134,7 +1134,7 @@ const ResultsPage: React.FC = () => {
                         icon={<ImportOutlined />}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleImportData(file.filepath, 'append')
+                          handleImportData(file.filePath, 'append')
                         }}
                         loading={loadingData}
                       >
@@ -1146,7 +1146,7 @@ const ResultsPage: React.FC = () => {
                         icon={<DeleteOutlined />}
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleDeleteDataFile(file.filepath)
+                          handleDeleteDataFile(file.filePath)
                         }}
                       >
                         删除

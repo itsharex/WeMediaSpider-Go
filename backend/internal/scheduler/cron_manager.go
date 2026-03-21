@@ -10,6 +10,7 @@ import (
 	"WeMediaSpider/backend/pkg/logger"
 	"WeMediaSpider/backend/pkg/timeutil"
 
+	"go.uber.org/zap"
 	"github.com/robfig/cron/v3"
 )
 
@@ -39,7 +40,7 @@ func NewCronManager(scheduler *TaskScheduler) *CronManager {
 // Start 启动定时任务管理器
 func (cm *CronManager) Start() {
 	cm.cron.Start()
-	logger.Info("CronManager started")
+	logger.Log.Info("CronManager started")
 }
 
 // Stop 停止定时任务管理器
@@ -47,7 +48,7 @@ func (cm *CronManager) Stop() {
 	cm.cancel()
 	ctx := cm.cron.Stop()
 	<-ctx.Done()
-	logger.Info("CronManager stopped")
+	logger.Log.Info("CronManager stopped")
 }
 
 // AddTask 添加定时任务
@@ -65,7 +66,7 @@ func (cm *CronManager) AddTask(task *models.ScheduledTask) error {
 	}
 
 	cm.tasks[task.ID] = entryID
-	logger.Infof("Added task %d with cron: %s", task.ID, task.CronExpression)
+	logger.Log.Info("Added task", zap.Uint("taskID", task.ID), zap.String("cron", task.CronExpression))
 
 	return nil
 }
@@ -78,7 +79,7 @@ func (cm *CronManager) RemoveTask(taskID uint) {
 	if entryID, exists := cm.tasks[taskID]; exists {
 		cm.cron.Remove(entryID)
 		delete(cm.tasks, taskID)
-		logger.Infof("Removed task %d", taskID)
+		logger.Log.Info("Removed task", zap.Uint("taskID", taskID))
 	}
 }
 

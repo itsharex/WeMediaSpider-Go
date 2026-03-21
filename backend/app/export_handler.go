@@ -13,6 +13,7 @@ import (
 	"WeMediaSpider/backend/pkg/logger"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 func (a *App) SelectSaveFile(defaultFilename string, filters []runtime.FileFilter) (string, error) {
@@ -29,17 +30,17 @@ func (a *App) SelectSaveFile(defaultFilename string, filters []runtime.FileFilte
 
 // ExportArticles 导出文章
 func (a *App) ExportArticles(articles []models.Article, format string, filename string) error {
-	logger.Infof("Exporting %d articles to %s format: %s", len(articles), format, filename)
+	logger.Log.Info("导出文章", zap.Int("count", len(articles)), zap.String("format", format), zap.String("file", filename))
 	exporter := export.GetExporter(format)
 	err := exporter.Export(articles, filename)
 	if err != nil {
-		logger.Errorf("Export failed: %v", err)
+		logger.Log.Error("导出失败", zap.Error(err))
 	} else {
-		logger.Infof("Export completed successfully")
+		logger.Log.Info("导出成功")
 		// 保存导出统计
 		if a.statsRepo != nil {
 			if err := a.statsRepo.IncrementExports(); err != nil {
-				logger.Errorf("Failed to update export stats: %v", err)
+				logger.Log.Error("更新导出统计失败", zap.Error(err))
 			}
 		}
 	}
@@ -73,7 +74,7 @@ func (a *App) ImportJSONFile(filePath string) error {
 		return fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	logger.Infof("Importing %d articles from %s", len(savedData.Articles), filePath)
+	logger.Log.Info("导入JSON文件", zap.Int("count", len(savedData.Articles)), zap.String("file", filePath))
 
 	// 转换并保存到数据库
 	dbArticles := make([]*dbmodels.Article, 0, len(savedData.Articles))
@@ -83,7 +84,7 @@ func (a *App) ImportJSONFile(filePath string) error {
 		// 查找或创建公众号
 		account, err := a.accountRepo.FindOrCreate(article.AccountFakeid, article.AccountName)
 		if err != nil {
-			logger.Warnf("Failed to find or create account: %v", err)
+			logger.Log.Warn("查找或创建公众号失败", zap.Error(err))
 			continue
 		}
 
@@ -96,7 +97,7 @@ func (a *App) ImportJSONFile(filePath string) error {
 		if err := a.articleRepo.BatchCreate(dbArticles); err != nil {
 			return fmt.Errorf("failed to save articles: %w", err)
 		}
-		logger.Infof("Successfully imported %d articles", len(dbArticles))
+		logger.Log.Info("成功导入文章", zap.Int("count", len(dbArticles)))
 	}
 
 	// 更新统计信息
@@ -111,7 +112,7 @@ func (a *App) ImportJSONFile(filePath string) error {
 		todayArticles,
 		lastScrapeTime,
 	); err != nil {
-		logger.Warnf("Failed to update stats: %v", err)
+		logger.Log.Warn("更新统计失败", zap.Error(err))
 	}
 
 	return nil
@@ -181,11 +182,10 @@ func (a *App) ExportToJSON(dateOrPath string) (string, error) {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	logger.Infof("Exported %d articles to %s", len(articles), savePath)
+	logger.Log.Info("导出JSON成功", zap.Int("count", len(articles)), zap.String("path", savePath))
 	return savePath, nil
 }
 
 // ============================================================
 // 定时任务管理 API
 // ============================================================
-

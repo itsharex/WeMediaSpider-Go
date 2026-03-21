@@ -13,6 +13,7 @@ import (
 	"WeMediaSpider/backend/pkg/logger"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 func (a *App) GetAppData() (models.AppData, error) {
@@ -29,7 +30,7 @@ func (a *App) GetAppData() (models.AppData, error) {
 	// 获取公众号列表
 	accounts, err := a.accountRepo.List()
 	if err != nil {
-		logger.Warnf("Failed to list accounts: %v", err)
+		logger.Log.Warn("获取公众号列表失败", zap.Error(err))
 		accounts = []*dbmodels.Account{}
 	}
 
@@ -43,7 +44,7 @@ func (a *App) GetAppData() (models.AppData, error) {
 
 // UpdateAppData 更新应用数据（已废弃，保留用于兼容）
 func (a *App) UpdateAppData(articles []models.Article) error {
-	logger.Warn("UpdateAppData is deprecated, stats are updated automatically")
+	logger.Log.Warn("UpdateAppData 已废弃，统计数据自动更新")
 	return nil
 }
 
@@ -153,17 +154,17 @@ func (a *App) DeleteDataFile(fakeidOrPath string) error {
 	// 删除所有文章
 	for _, article := range dbArticles {
 		if err := a.articleRepo.Delete(article.ArticleID); err != nil {
-			logger.Warnf("Failed to delete article %s: %v", article.ArticleID, err)
+			logger.Log.Warn("Failed to delete article", zap.String("articleID", article.ArticleID), zap.Error(err))
 		}
 	}
 
-	logger.Infof("Deleted %d articles for account %s", len(dbArticles), fakeidOrPath)
+	logger.Log.Info("Deleted articles for account", zap.Int("count", len(dbArticles)), zap.String("account", fakeidOrPath))
 
 	// 更新统计信息
 	totalArticles, _ := a.articleRepo.Count()
 	accounts, _ := a.accountRepo.List()
 	if err := a.statsRepo.UpdateArticleStats(int(totalArticles), len(accounts), 0, ""); err != nil {
-		logger.Warnf("Failed to update stats: %v", err)
+		logger.Log.Warn("Failed to update stats", zap.Error(err))
 	}
 
 	return nil

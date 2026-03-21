@@ -13,6 +13,8 @@ import (
 	"WeMediaSpider/backend/internal/spider"
 	"WeMediaSpider/backend/pkg/logger"
 	"WeMediaSpider/backend/pkg/timeutil"
+
+	"go.uber.org/zap"
 )
 
 // TaskScheduler 任务调度器
@@ -45,19 +47,19 @@ func NewTaskScheduler(
 func (ts *TaskScheduler) ExecuteTask(parentCtx context.Context, taskID uint, triggerType string) {
 	// 检查任务是否已在运行
 	if ts.isTaskRunning(taskID) {
-		logger.Warnf("Task %d is already running, skipping", taskID)
+		logger.Log.Warn("Task is already running, skipping", zap.Uint("taskID", taskID))
 		return
 	}
 
 	// 获取任务配置
 	task, err := ts.taskRepo.FindByID(taskID)
 	if err != nil {
-		logger.Errorf("Failed to find task %d: %v", taskID, err)
+		logger.Log.Error("Failed to find task", zap.Uint("taskID", taskID), zap.Error(err))
 		return
 	}
 
 	if !task.Enabled {
-		logger.Infof("Task %d is disabled, skipping", taskID)
+		logger.Log.Info("Task is disabled, skipping", zap.Uint("taskID", taskID))
 		return
 	}
 
@@ -76,7 +78,7 @@ func (ts *TaskScheduler) ExecuteTask(parentCtx context.Context, taskID uint, tri
 	}
 
 	if err := ts.taskRepo.CreateExecutionLog(execLog); err != nil {
-		logger.Errorf("Failed to create execution log: %v", err)
+		logger.Log.Error("Failed to create execution log", zap.Error(err))
 		return
 	}
 
@@ -111,8 +113,7 @@ func (ts *TaskScheduler) ExecuteTask(parentCtx context.Context, taskID uint, tri
 	ts.taskRepo.UpdateExecutionLog(execLog)
 	ts.taskRepo.Update(task)
 
-	logger.Infof("Task %d completed: status=%s, articles=%d, duration=%dms",
-		taskID, execLog.Status, execLog.ArticlesCount, duration)
+	logger.Log.Info("Task completed", zap.Uint("taskID", taskID), zap.String("status", execLog.Status), zap.Int("articles", execLog.ArticlesCount), zap.Int64("durationMs", duration))
 }
 
 // executeScrape 执行爬取
@@ -128,8 +129,7 @@ func (ts *TaskScheduler) executeScrape(ctx context.Context, task *models.Schedul
 		now := timeutil.Now()
 		scrapeConfig.EndDate = now.Format("2006-01-02")
 		scrapeConfig.StartDate = now.AddDate(0, 0, -scrapeConfig.RecentDays).Format("2006-01-02")
-		logger.Infof("Task %d: using recentDays=%d, date range: %s ~ %s",
-			task.ID, scrapeConfig.RecentDays, scrapeConfig.StartDate, scrapeConfig.EndDate)
+		logger.Log.Info("Task using recentDays", zap.Uint("taskID", task.ID), zap.Int("recentDays", scrapeConfig.RecentDays), zap.String("start", scrapeConfig.StartDate), zap.String("end", scrapeConfig.EndDate))
 	}
 
 	// 检查登录状态
@@ -153,7 +153,7 @@ func (ts *TaskScheduler) executeScrape(ctx context.Context, task *models.Schedul
 	// 保存到数据库
 	if len(articles) > 0 {
 		if err := ts.saveArticles(articles); err != nil {
-			logger.Errorf("Failed to save articles: %v", err)
+			logger.Log.Error("Failed to save articles", zap.Error(err))
 		}
 	}
 
@@ -171,7 +171,7 @@ func (ts *TaskScheduler) saveArticles(articles []appmodels.Article) error {
 		// 查找或创建公众号
 		account, err := ts.accountRepo.FindOrCreate(article.AccountFakeid, article.AccountName)
 		if err != nil {
-			logger.Warnf("Failed to find or create account %s: %v", article.AccountName, err)
+			logger.Log.Warn("Failed to find or create account", zap.String("account", article.AccountName), zap.Error(err))
 			continue
 		}
 
@@ -207,7 +207,7 @@ func (ts *TaskScheduler) CancelTask(taskID uint) error {
 
 	if cancel, exists := ts.runningTasks[taskID]; exists {
 		cancel()
-		logger.Infof("Canceled task %d", taskID)
+		logger.Log.Info("Canceled task", zap.Uint("taskID", taskID))
 		return nil
 	}
 

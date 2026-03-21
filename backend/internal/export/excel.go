@@ -8,6 +8,8 @@ import (
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
 
+	"go.uber.org/zap"
+
 	"github.com/xuri/excelize/v2"
 )
 
@@ -16,7 +18,7 @@ type ExcelExporter struct{}
 
 // Export 导出为 Excel
 func (e *ExcelExporter) Export(articles []models.Article, filename string) error {
-	logger.Infof("📊 开始导出 Excel 文件: %s (文章数: %d)", filename, len(articles))
+	logger.Log.Info("📊 开始导出 Excel 文件", zap.String("file", filename), zap.Int("count", len(articles)))
 
 	// 确保文件扩展名正确
 	if !strings.HasSuffix(strings.ToLower(filename), ".xlsx") {
@@ -26,7 +28,7 @@ func (e *ExcelExporter) Export(articles []models.Article, filename string) error
 		} else {
 			filename = filename + ".xlsx"
 		}
-		logger.Infof("📝 修正文件扩展名为: %s", filename)
+		logger.Log.Info("📝 修正文件扩展名", zap.String("file", filename))
 	}
 
 	f := excelize.NewFile()
@@ -35,11 +37,11 @@ func (e *ExcelExporter) Export(articles []models.Article, filename string) error
 	sheetName := "文章列表"
 	index, err := f.NewSheet(sheetName)
 	if err != nil {
-		logger.Errorf("❌ 创建工作表失败: %v", err)
+		logger.Log.Error("❌ 创建工作表失败", zap.Error(err))
 		return err
 	}
 
-	logger.Infof("✅ 创建工作表: %s", sheetName)
+	logger.Log.Info("✅ 创建工作表", zap.String("sheet", sheetName))
 
 	// 设置表头
 	headers := []string{"公众号名称", "文章标题", "文章链接", "发布时间", "正文内容"}
@@ -66,7 +68,7 @@ func (e *ExcelExporter) Export(articles []models.Article, filename string) error
 	})
 	f.SetCellStyle(sheetName, "A1", fmt.Sprintf("%c1", 'A'+len(headers)-1), headerStyle)
 
-	logger.Infof("📝 开始写入 %d 篇文章数据...", len(articles))
+	logger.Log.Info("📝 开始写入文章数据", zap.Int("count", len(articles)))
 
 	// 写入数据
 	for i, article := range articles {
@@ -78,7 +80,7 @@ func (e *ExcelExporter) Export(articles []models.Article, filename string) error
 		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), article.Content)
 
 		if (i+1)%10 == 0 || i == len(articles)-1 {
-			logger.Infof("  已写入 %d/%d 篇文章", i+1, len(articles))
+			logger.Log.Info(fmt.Sprintf("  已写入 %d/%d 篇文章", i+1, len(articles)))
 		}
 	}
 
@@ -95,14 +97,14 @@ func (e *ExcelExporter) Export(articles []models.Article, filename string) error
 	// 删除默认的 Sheet1
 	f.DeleteSheet("Sheet1")
 
-	logger.Infof("💾 保存 Excel 文件: %s", filename)
+	logger.Log.Info("💾 保存 Excel 文件", zap.String("file", filename))
 
 	// 保存文件
 	if err := f.SaveAs(filename); err != nil {
-		logger.Errorf("❌ 保存 Excel 文件失败: %v", err)
+		logger.Log.Error("❌ 保存 Excel 文件失败", zap.Error(err))
 		return err
 	}
 
-	logger.Infof("✅ Excel 文件导出成功: %s", filename)
+	logger.Log.Info("✅ Excel 文件导出成功", zap.String("file", filename))
 	return nil
 }

@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	dbmodels "WeMediaSpider/backend/internal/database/models"
 	appmodels "WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/internal/repository"
 	"WeMediaSpider/backend/pkg/logger"
 	"WeMediaSpider/backend/pkg/timeutil"
+
+	"go.uber.org/zap"
 )
 
 // Analyzer 数据分析器
@@ -51,17 +52,17 @@ func (a *Analyzer) GetAnalyticsData(startDate, endDate time.Time, accountNames [
 	}
 	cacheKey := fmt.Sprintf("%s_%s_%s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), accountKey)
 
-	logger.Infof("分析数据缓存 key: %s, accountNames: %v", cacheKey, accountNames)
+	logger.Log.Info("分析数据缓存 key", zap.String("key", cacheKey), zap.Any("accounts", accountNames))
 
 	// 检查缓存
 	if !forceRefresh {
 		if cached := a.cache.Get(cacheKey); cached != nil {
-			logger.Infof("返回缓存的分析数据，公众号数量: %d", len(cached.TimeDistribution))
+			logger.Log.Info("返回缓存的分析数据", zap.Int("accounts", len(cached.TimeDistribution)))
 			return cached, nil
 		}
 	}
 
-	logger.Info("开始计算分析数据...")
+	logger.Log.Info("开始计算分析数据")
 
 	// 1. 按公众号分组的时间分布（支持按公众号筛选）
 	timeDistribution, err := a.GetTimeDistributionByAccount(startDate, endDate, accountNames, "day")
@@ -69,7 +70,7 @@ func (a *Analyzer) GetAnalyticsData(startDate, endDate time.Time, accountNames [
 		return nil, fmt.Errorf("获取时间分布失败: %w", err)
 	}
 
-	logger.Infof("获取到时间分布数据，公众号数量: %d", len(timeDistribution))
+	logger.Log.Info("获取到时间分布数据", zap.Int("accounts", len(timeDistribution)))
 
 	// 2. 热门关键词（支持按公众号筛选）
 	topKeywords, err := a.GetTopKeywords(startDate, endDate, accountNames, 50)
@@ -100,7 +101,7 @@ func (a *Analyzer) GetAnalyticsData(startDate, endDate time.Time, accountNames [
 	// 保存到缓存
 	a.cache.Set(cacheKey, data)
 
-	logger.Info("分析数据计算完成")
+	logger.Log.Info("分析数据计算完成")
 	return data, nil
 }
 
@@ -217,6 +218,13 @@ func (a *Analyzer) GetAccountRanking(startDate, endDate time.Time, topN int) ([]
 		return nil, err
 	}
 
+	// 批量获取各公众号平均文章长度，避免 N+1 查询
+	avgLengths, err := a.analyticsRepo.GetAvgLengthByAccount()
+	if err != nil {
+		logger.Log.Warn("获取平均文章长度失败", zap.Error(err))
+		avgLengths = map[string]int{}
+	}
+
 	daysDiff := endDate.Sub(startDate).Hours() / 24
 	if daysDiff == 0 {
 		daysDiff = 1
@@ -230,16 +238,7 @@ func (a *Analyzer) GetAccountRanking(startDate, endDate time.Time, topN int) ([]
 			continue
 		}
 
-		// 计算平均文章长度
-		var avgLength int
-		articles, err := a.articleRepo.FindByAccountFakeid(acc.Fakeid, 0, 0)
-		if err == nil && len(articles) > 0 {
-			totalLength := 0
-			for _, art := range articles {
-				totalLength += len(art.Content)
-			}
-			avgLength = totalLength / len(articles)
-		}
+		avgLength := avgLengths[acc.Fakeid]
 
 		// 计算发文频率
 		publishFreq := float64(count) / daysDiff
@@ -279,6 +278,3 @@ func (a *Analyzer) ClearCache() {
 func (a *Analyzer) GetCache() *AnalyticsCache {
 	return a.cache
 }
-
-// 避免未使用的导入警告
-var _ = dbmodels.Account{}

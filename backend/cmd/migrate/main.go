@@ -12,6 +12,8 @@ import (
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/internal/repository"
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // SavedData JSON 文件数据结构
@@ -35,12 +37,12 @@ type Migrator struct {
 func main() {
 	// 初始化日志
 	logger.Init()
-	logger.Info("========== 开始数据迁移 ==========")
+	logger.Log.Info("========== 开始数据迁移 ==========")
 
 	// 获取用户主目录
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		logger.Errorf("Failed to get home directory: %v", err)
+		logger.Log.Error("Failed to get home directory", zap.Error(err))
 		os.Exit(1)
 	}
 
@@ -56,23 +58,23 @@ func main() {
 
 	// 执行迁移
 	if err := migrator.Run(); err != nil {
-		logger.Errorf("Migration failed: %v", err)
+		logger.Log.Error("Migration failed", zap.Error(err))
 		os.Exit(1)
 	}
 
-	logger.Info("========== 数据迁移完成 ==========")
+	logger.Log.Info("========== 数据迁移完成 ==========")
 }
 
 // Run 执行迁移
 func (m *Migrator) Run() error {
 	// 1. 备份 JSON 文件
-	logger.Info("步骤 1/6: 备份 JSON 文件")
+	logger.Log.Info("步骤 1/6: 备份 JSON 文件")
 	if err := m.BackupJSONFiles(); err != nil {
 		return fmt.Errorf("backup failed: %w", err)
 	}
 
 	// 2. 初始化数据库
-	logger.Info("步骤 2/6: 初始化数据库")
+	logger.Log.Info("步骤 2/6: 初始化数据库")
 	homeDir, _ := os.UserHomeDir()
 	configDir := filepath.Join(homeDir, ".wemediaspider")
 
@@ -94,26 +96,26 @@ func (m *Migrator) Run() error {
 	m.statsRepo = repository.NewStatsRepository(db.DB)
 
 	// 3. 迁移文章数据
-	logger.Info("步骤 3/6: 迁移文章数据")
+	logger.Log.Info("步骤 3/6: 迁移文章数据")
 	articleCount, accountCount, err := m.MigrateArticles()
 	if err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	// 4. 更新统计信息
-	logger.Info("步骤 4/6: 更新统计信息")
+	logger.Log.Info("步骤 4/6: 更新统计信息")
 	if err := m.UpdateStats(articleCount, accountCount); err != nil {
 		return fmt.Errorf("failed to update stats: %w", err)
 	}
 
 	// 5. 验证数据
-	logger.Info("步骤 5/6: 验证数据完整性")
+	logger.Log.Info("步骤 5/6: 验证数据完整性")
 	if err := m.ValidateData(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
 	// 6. 生成报告
-	logger.Info("步骤 6/6: 生成迁移报告")
+	logger.Log.Info("步骤 6/6: 生成迁移报告")
 	if err := m.GenerateReport(articleCount, accountCount); err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
@@ -131,7 +133,7 @@ func (m *Migrator) BackupJSONFiles() error {
 
 	// 检查源目录是否存在
 	if _, err := os.Stat(m.storageDir); os.IsNotExist(err) {
-		logger.Warn("数据目录不存在，跳过备份")
+		logger.Log.Warn("数据目录不存在，跳过备份")
 		return nil
 	}
 
@@ -153,19 +155,19 @@ func (m *Migrator) BackupJSONFiles() error {
 		// 复制文件
 		data, err := os.ReadFile(srcPath)
 		if err != nil {
-			logger.Warnf("Failed to read file %s: %v", file.Name(), err)
+			logger.Log.Warn("Failed to read file", zap.String("file", file.Name()), zap.Error(err))
 			continue
 		}
 
 		if err := os.WriteFile(dstPath, data, 0644); err != nil {
-			logger.Warnf("Failed to backup file %s: %v", file.Name(), err)
+			logger.Log.Warn("Failed to backup file", zap.String("file", file.Name()), zap.Error(err))
 			continue
 		}
 
 		backupCount++
 	}
 
-	logger.Infof("已备份 %d 个 JSON 文件到: %s", backupCount, backupDataDir)
+	logger.Log.Info("已备份 JSON 文件", zap.Int("count", backupCount), zap.String("dest", backupDataDir))
 	return nil
 }
 
@@ -173,7 +175,7 @@ func (m *Migrator) BackupJSONFiles() error {
 func (m *Migrator) MigrateArticles() (int, int, error) {
 	// 检查数据目录
 	if _, err := os.Stat(m.storageDir); os.IsNotExist(err) {
-		logger.Warn("数据目录不存在，跳过迁移")
+		logger.Log.Warn("数据目录不存在，跳过迁移")
 		return 0, 0, nil
 	}
 
@@ -194,17 +196,17 @@ func (m *Migrator) MigrateArticles() (int, int, error) {
 		}
 
 		filePath := filepath.Join(m.storageDir, file.Name())
-		logger.Infof("解析文件: %s", file.Name())
+		logger.Log.Info("解析文件", zap.String("file", file.Name()))
 
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			logger.Warnf("Failed to read file %s: %v", file.Name(), err)
+			logger.Log.Warn("Failed to read file", zap.String("file", file.Name()), zap.Error(err))
 			continue
 		}
 
 		var savedData SavedData
 		if err := json.Unmarshal(data, &savedData); err != nil {
-			logger.Warnf("Failed to parse file %s: %v", file.Name(), err)
+			logger.Log.Warn("Failed to parse file", zap.String("file", file.Name()), zap.Error(err))
 			continue
 		}
 
@@ -216,27 +218,27 @@ func (m *Migrator) MigrateArticles() (int, int, error) {
 		}
 	}
 
-	logger.Infof("共解析 %d 篇文章，%d 个公众号", len(articleMap), len(accountMap))
+	logger.Log.Info("共解析文章和公众号", zap.Int("articles", len(articleMap)), zap.Int("accounts", len(accountMap)))
 
 	// 先创建公众号
-	logger.Info("创建公众号记录...")
+	logger.Log.Info("创建公众号记录...")
 	accountIDMap := make(map[string]uint)
 	for fakeid, name := range accountMap {
 		account, err := m.accountRepo.FindOrCreate(fakeid, name)
 		if err != nil {
-			logger.Warnf("Failed to create account %s: %v", name, err)
+			logger.Log.Warn("Failed to create account", zap.String("name", name), zap.Error(err))
 			continue
 		}
 		accountIDMap[fakeid] = account.ID
 	}
 
 	// 批量插入文章
-	logger.Info("批量插入文章...")
+	logger.Log.Info("批量插入文章...")
 	dbArticles := make([]*dbmodels.Article, 0, len(articleMap))
 	for _, article := range articleMap {
 		accountID, ok := accountIDMap[article.AccountFakeid]
 		if !ok {
-			logger.Warnf("Account not found for article %s", article.ID)
+			logger.Log.Warn("Account not found for article", zap.String("id", article.ID))
 			continue
 		}
 
@@ -250,7 +252,7 @@ func (m *Migrator) MigrateArticles() (int, int, error) {
 		}
 	}
 
-	logger.Infof("成功迁移 %d 篇文章", len(dbArticles))
+	logger.Log.Info("成功迁移文章", zap.Int("count", len(dbArticles)))
 	return len(dbArticles), len(accountMap), nil
 }
 
@@ -276,7 +278,7 @@ func (m *Migrator) ValidateData() error {
 		return fmt.Errorf("failed to list accounts: %w", err)
 	}
 
-	logger.Infof("数据库统计: %d 篇文章, %d 个公众号", articleCount, len(accounts))
+	logger.Log.Info("数据库统计", zap.Int64("articles", articleCount), zap.Int("accounts", len(accounts)))
 
 	// 随机抽样验证
 	if articleCount > 0 {
@@ -287,8 +289,7 @@ func (m *Migrator) ValidateData() error {
 
 		if len(articles) > 0 {
 			sample := articles[0]
-			logger.Infof("样本文章: ID=%s, 标题=%s, 公众号=%s",
-				sample.ArticleID, sample.Title, sample.AccountName)
+			logger.Log.Info("样本文章", zap.String("id", sample.ArticleID), zap.String("title", sample.Title), zap.String("account", sample.AccountName))
 		}
 	}
 
@@ -323,7 +324,7 @@ func (m *Migrator) GenerateReport(articleCount, accountCount int) error {
 		return fmt.Errorf("failed to write report: %w", err)
 	}
 
-	logger.Infof("迁移报告已生成: %s", reportPath)
+	logger.Log.Info("迁移报告已生成", zap.String("path", reportPath))
 	fmt.Println(report)
 
 	return nil

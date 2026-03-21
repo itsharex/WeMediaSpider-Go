@@ -1,9 +1,10 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"WeMediaSpider/backend/internal/database"
@@ -13,6 +14,7 @@ import (
 	"WeMediaSpider/backend/pkg/logger"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 func (a *App) Login() error {
@@ -63,7 +65,7 @@ func (a *App) ExportCredentials() (string, error) {
 		return "", fmt.Errorf("保存文件失败: %w", err)
 	}
 
-	logger.Infof("凭证已导出到: %s", filepath)
+	logger.Log.Info("凭证已导出", zap.String("path", filepath))
 	return filepath, nil
 }
 
@@ -95,7 +97,7 @@ func (a *App) ImportCredentials() error {
 		return err
 	}
 
-	logger.Infof("凭证已从文件导入: %s", filepath)
+	logger.Log.Info("凭证已从文件导入", zap.String("path", filepath))
 	return nil
 }
 
@@ -122,12 +124,14 @@ func (a *App) SearchAccount(query string) ([]models.Account, error) {
 
 // StartScrape 开始爬取
 func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) {
-	// 创建异步爬虫
+	// 创建异步爬虫（加锁保护赋值操作）
+	a.scrapeMu.Lock()
 	a.scraper = spider.NewAsyncScraper(
 		a.loginManager.GetToken(),
 		a.loginManager.GetHeaders(),
 		config.MaxWorkers,
 	)
+	a.scrapeMu.Unlock()
 
 	// 创建进度通道
 	progressChan := make(chan models.Progress, 100)
@@ -164,7 +168,7 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 	if err == nil && len(articles) > 0 {
 		// 保存到数据库
 		if a.db != nil && a.articleRepo != nil {
-			logger.Info("保存文章到数据库...")
+			logger.Log.Info("保存文章到数据库")
 			dbArticles := make([]*dbmodels.Article, 0, len(articles))
 
 			for i := range articles {
@@ -172,7 +176,7 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 				// 查找或创建公众号
 				account, accErr := a.accountRepo.FindOrCreate(article.AccountFakeid, article.AccountName)
 				if accErr != nil {
-					logger.Errorf("Failed to find or create account: %v", accErr)
+					logger.Log.Error("查找或创建公众号失败", zap.Error(accErr))
 					continue
 				}
 
@@ -183,9 +187,9 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 			// 批量保存到数据库
 			if len(dbArticles) > 0 {
 				if saveErr := a.articleRepo.BatchCreate(dbArticles); saveErr != nil {
-					logger.Errorf("Failed to save articles to database: %v", saveErr)
+				logger.Log.Error("批量保存文章到数据库失败", zap.Error(saveErr))
 				} else {
-					logger.Infof("Successfully saved %d articles to database", len(dbArticles))
+					logger.Log.Info("文章已保存到数据库", zap.Int("count", len(dbArticles)))
 				}
 			}
 
@@ -201,7 +205,7 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 				todayArticles,
 				lastScrapeTime,
 			); statsErr != nil {
-				logger.Errorf("Failed to update stats: %v", statsErr)
+				logger.Log.Error("更新统计信息失败", zap.Error(statsErr))
 			}
 		}
 
@@ -210,11 +214,10 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 		})
 	} else if err != nil {
 		// 检查是否是取消操作导致的错误
-		errMsg := err.Error()
-		if errMsg != "context canceled" && !strings.Contains(errMsg, "canceled") {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			// 只有非取消的错误才发送错误事件
 			runtime.EventsEmit(a.ctx, "scrape:error", map[string]string{
-				"error": errMsg,
+				"error": err.Error(),
 			})
 		}
 	}
@@ -224,8 +227,11 @@ func (a *App) StartScrape(config models.ScrapeConfig) ([]models.Article, error) 
 
 // CancelScrape 取消爬取
 func (a *App) CancelScrape() {
-	if a.scraper != nil {
-		a.scraper.Cancel()
+	a.scrapeMu.Lock()
+	scraper := a.scraper
+	a.scrapeMu.Unlock()
+	if scraper != nil {
+		scraper.Cancel()
 	}
 }
 
@@ -241,8 +247,10 @@ func (a *App) ExtractArticleImages(content string) []spider.ImageInfo {
 
 // BatchDownloadImages 批量下载图片
 func (a *App) BatchDownloadImages(images []spider.ImageInfo, baseDir string, maxWorkers int) error {
-	// 创建新的下载器
+	// 创建新的下载器（加锁保护赋值操作）
+	a.scrapeMu.Lock()
 	a.imageDownloader = spider.NewImageDownloader(a.loginManager.GetHeaders())
+	a.scrapeMu.Unlock()
 
 	// 创建进度通道
 	progressChan := make(chan spider.ImageDownloadProgress, 100)
@@ -265,15 +273,14 @@ func (a *App) BatchDownloadImages(images []spider.ImageInfo, baseDir string, max
 		// 保存图片下载统计
 		if a.statsRepo != nil {
 			if err := a.statsRepo.IncrementImages(len(images)); err != nil {
-				logger.Errorf("Failed to update image stats: %v", err)
+				logger.Log.Error("更新图片下载统计失败", zap.Error(err))
 			}
 		}
 	} else {
 		// 检查是否是取消操作导致的错误
-		errMsg := err.Error()
-		if errMsg != "context canceled" && !strings.Contains(errMsg, "canceled") {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			runtime.EventsEmit(a.ctx, "image:error", map[string]string{
-				"error": errMsg,
+				"error": err.Error(),
 			})
 		}
 	}
@@ -283,8 +290,11 @@ func (a *App) BatchDownloadImages(images []spider.ImageInfo, baseDir string, max
 
 // CancelImageDownload 取消图片下载
 func (a *App) CancelImageDownload() {
-	if a.imageDownloader != nil {
-		a.imageDownloader.Cancel()
+	a.scrapeMu.Lock()
+	downloader := a.imageDownloader
+	a.scrapeMu.Unlock()
+	if downloader != nil {
+		downloader.Cancel()
 	}
 }
 

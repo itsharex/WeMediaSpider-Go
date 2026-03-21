@@ -26,6 +26,9 @@ type AnalyticsRepository interface {
 
 	// 公众号活跃度统计
 	GetAccountActivity(startDate, endDate time.Time) ([]*models.Account, map[uint]int, error)
+
+	// 批量获取各公众号的平均文章长度（fakeid -> avgLength）
+	GetAvgLengthByAccount() (map[string]int, error)
 }
 
 type analyticsRepository struct {
@@ -234,21 +237,47 @@ func (r *analyticsRepository) GetLengthDistribution(startDate, endDate time.Time
 func (r *analyticsRepository) GetAccountActivity(startDate, endDate time.Time) ([]*models.Account, map[uint]int, error) {
 	// 获取所有公众号
 	var accounts []*models.Account
-	err := r.db.Find(&accounts).Error
-	if err != nil {
+	if err := r.db.Find(&accounts).Error; err != nil {
 		return nil, nil, err
 	}
 
-	// 统计每个公众号的文章数
-	articleCounts := make(map[uint]int)
-	for _, acc := range accounts {
-		var count int64
-		r.db.Model(&models.Article{}).
-			Where("account_id = ? AND publish_timestamp >= ? AND publish_timestamp <= ?",
-				acc.ID, startDate.Unix(), endDate.Unix()).
-			Count(&count)
-		articleCounts[acc.ID] = int(count)
+	// 一次聚合查询统计每个公众号的文章数
+	type countRow struct {
+		AccountID uint
+		Count     int
+	}
+	var rows []countRow
+	r.db.Model(&models.Article{}).
+		Select("account_id, COUNT(*) as count").
+		Where("publish_timestamp >= ? AND publish_timestamp <= ?", startDate.Unix(), endDate.Unix()).
+		Group("account_id").
+		Scan(&rows)
+
+	articleCounts := make(map[uint]int, len(rows))
+	for _, row := range rows {
+		articleCounts[row.AccountID] = row.Count
 	}
 
 	return accounts, articleCounts, nil
+}
+
+// GetAvgLengthByAccount 批量获取各公众号的平均文章长度
+func (r *analyticsRepository) GetAvgLengthByAccount() (map[string]int, error) {
+	type row struct {
+		AccountFakeid string
+		AvgLen        float64
+	}
+	var rows []row
+	err := r.db.Model(&models.Article{}).
+		Select("account_fakeid, AVG(LENGTH(content)) as avg_len").
+		Group("account_fakeid").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]int, len(rows))
+	for _, r := range rows {
+		result[r.AccountFakeid] = int(r.AvgLen)
+	}
+	return result, nil
 }

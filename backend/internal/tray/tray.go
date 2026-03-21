@@ -12,11 +12,11 @@ import (
 
 // Manager 托盘管理器
 type Manager struct {
-	ctx        context.Context
-	onShow     func()
-	onQuit     func()
-	isHidden   bool
-	quitFunc   func() // 退出回调函数
+	ctx      context.Context
+	onShow   func()
+	onQuit   func()
+	isHidden bool
+	quitFunc func() // 退出回调函数
 }
 
 // NewManager 创建托盘管理器
@@ -35,11 +35,11 @@ func (m *Manager) Setup(ctx context.Context, iconData []byte, quitFunc func()) {
 		systray.Run(func() {
 			m.onReady(iconData)
 		}, func() {
-			logger.Info("System tray exiting")
+			logger.Log.Info("System tray exiting")
 		})
 	}()
 
-	logger.Info("System tray initialized")
+	logger.Log.Info("System tray initialized")
 }
 
 // onReady 托盘就绪回调
@@ -51,7 +51,7 @@ func (m *Manager) onReady(iconData []byte) {
 		systray.SetIcon(iconData)
 	} else {
 		// 如果没有图标数据，使用默认图标（空图标）
-		logger.Warn("No icon data provided, using default icon")
+		logger.Log.Warn("No icon data provided, using default icon")
 	}
 
 	systray.SetTitle("WeMediaSpider")
@@ -66,14 +66,14 @@ func (m *Manager) onReady(iconData []byte) {
 
 	// 监听菜单点击
 	go func() {
-		logger.Info("Tray menu listener started")
+		logger.Log.Info("Tray menu listener started")
 		for {
 			select {
 			case <-mShow.ClickedCh:
-				logger.Info("Show window menu item clicked")
+				logger.Log.Info("Show window menu item clicked")
 				m.ShowWindow()
 			case <-mQuit.ClickedCh:
-				logger.Info("Quit menu item clicked")
+				logger.Log.Info("Quit menu item clicked")
 				m.Quit()
 				return
 			}
@@ -86,14 +86,14 @@ func (m *Manager) HideToTray() {
 	if m.ctx != nil {
 		runtime.WindowHide(m.ctx)
 		m.isHidden = true
-		logger.Info("Window hidden to tray")
+		logger.Log.Info("Window hidden to tray")
 	}
 }
 
 // ShowWindow 显示窗口
 func (m *Manager) ShowWindow() {
 	if m.ctx == nil {
-		logger.Error("Context is nil, cannot show window")
+		logger.Log.Error("Context is nil, cannot show window")
 		return
 	}
 
@@ -110,12 +110,12 @@ func (m *Manager) ShowWindow() {
 	}()
 
 	m.isHidden = false
-	logger.Info("Window shown from tray")
+	logger.Log.Info("Window shown from tray")
 }
 
 // Quit 退出应用
 func (m *Manager) Quit() {
-	logger.Info("Tray quit requested")
+	logger.Log.Info("Tray quit requested")
 	if m.quitFunc != nil {
 		m.quitFunc()
 	} else {
@@ -131,4 +131,3 @@ func (m *Manager) Quit() {
 func (m *Manager) IsHidden() bool {
 	return m.isHidden
 }
-

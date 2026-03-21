@@ -6,6 +6,8 @@ import (
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 func (a *App) GetAnalyticsData(startDate, endDate string, accountNames []string, forceRefresh bool) (*models.AnalyticsData, error) {
@@ -27,7 +29,11 @@ func (a *App) GetAnalyticsData(startDate, endDate string, accountNames []string,
 	// 将结束日期调整到当天的23:59:59，以包含整天的数据
 	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, end.Location())
 
-	logger.Infof("分析数据日期范围: %s 00:00:00 到 %s 23:59:59, accountNames: %v", startDate, endDate, accountNames)
+	logger.Log.Info("分析数据日期范围",
+		zap.String("start", startDate+" 00:00:00"),
+		zap.String("end", endDate+" 23:59:59"),
+		zap.Any("accounts", accountNames),
+	)
 
 	// 获取分析数据
 	data, err := a.analyzer.GetAnalyticsData(start, end, accountNames, forceRefresh)
@@ -60,6 +66,6 @@ func (a *App) ClearAnalyticsCache() error {
 	}
 
 	a.analyzer.ClearCache()
-	logger.Info("Analytics cache cleared")
+	logger.Log.Info("分析缓存已清除")
 	return nil
 }

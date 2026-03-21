@@ -34,7 +34,7 @@ func (a *App) ClearCache() error {
 	if a.cacheManager == nil {
 		return nil
 	}
-	logger.Info("Clearing all cache")
+	logger.Log.Info("Clearing all cache")
 	return a.cacheManager.ClearAll()
 }
 
@@ -43,7 +43,7 @@ func (a *App) ClearExpiredCache() error {
 	if a.cacheManager == nil {
 		return nil
 	}
-	logger.Info("Clearing expired cache")
+	logger.Log.Info("Clearing expired cache")
 	return a.cacheManager.ClearExpired()
 }
 

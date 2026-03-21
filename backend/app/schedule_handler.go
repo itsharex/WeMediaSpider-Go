@@ -7,6 +7,8 @@ import (
 	dbmodels "WeMediaSpider/backend/internal/database/models"
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 func (a *App) loadScheduledTasks() {
@@ -16,25 +18,25 @@ func (a *App) loadScheduledTasks() {
 
 	// 清理应用重启时正在运行的任务状态
 	if err := a.taskRepo.CleanupRunningLogs(); err != nil {
-		logger.Errorf("Failed to cleanup running logs: %v", err)
+		logger.Log.Error("清理运行日志失败", zap.Error(err))
 	}
 
 	// 加载所有已启用的任务
 	enabled := true
 	tasks, err := a.taskRepo.List(&enabled)
 	if err != nil {
-		logger.Errorf("Failed to load scheduled tasks: %v", err)
+		logger.Log.Error("加载定时任务失败", zap.Error(err))
 		return
 	}
 
 	// 添加到 CronManager
 	for _, task := range tasks {
 		if err := a.cronManager.AddTask(task); err != nil {
-			logger.Errorf("Failed to add task %d to cron: %v", task.ID, err)
+			logger.Log.Error("添加任务到Cron失败", zap.Uint("id", task.ID), zap.Error(err))
 		}
 	}
 
-	logger.Infof("Loaded %d enabled scheduled tasks", len(tasks))
+	logger.Log.Info("已加载定时任务", zap.Int("count", len(tasks)))
 }
 
 // CreateScheduledTask 创建定时任务
@@ -61,11 +63,11 @@ func (a *App) CreateScheduledTask(task dbmodels.ScheduledTask) error {
 	// 如果任务已启用，添加到 CronManager
 	if task.Enabled && a.cronManager != nil {
 		if err := a.cronManager.AddTask(&task); err != nil {
-			logger.Errorf("Failed to add task to cron: %v", err)
+			logger.Log.Error("添加任务到Cron失败", zap.Error(err))
 		}
 	}
 
-	logger.Infof("Created scheduled task: %s (ID: %d)", task.Name, task.ID)
+	logger.Log.Info("创建定时任务", zap.String("name", task.Name), zap.Uint("id", task.ID))
 	return nil
 }
 
@@ -93,11 +95,11 @@ func (a *App) UpdateScheduledTask(task dbmodels.ScheduledTask) error {
 	// 更新 CronManager
 	if a.cronManager != nil {
 		if err := a.cronManager.UpdateTask(&task); err != nil {
-			logger.Errorf("Failed to update task in cron: %v", err)
+			logger.Log.Error("更新任务到Cron失败", zap.Error(err))
 		}
 	}
 
-	logger.Infof("Updated scheduled task: %s (ID: %d)", task.Name, task.ID)
+	logger.Log.Info("更新定时任务", zap.String("name", task.Name), zap.Uint("id", task.ID))
 	return nil
 }
 
@@ -117,7 +119,7 @@ func (a *App) DeleteScheduledTask(id uint) error {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
 
-	logger.Infof("Deleted scheduled task: %d", id)
+	logger.Log.Info("删除定时任务", zap.Uint("id", id))
 	return nil
 }
 
@@ -178,7 +180,7 @@ func (a *App) RunScheduledTaskNow(id uint) error {
 	// 在后台执行任务
 	go a.taskScheduler.ExecuteTask(context.Background(), id, "manual")
 
-	logger.Infof("Manually triggered task: %d", id)
+	logger.Log.Info("手动触发任务", zap.Uint("id", id))
 	return nil
 }
 
@@ -192,7 +194,7 @@ func (a *App) CancelScheduledTask(id uint) error {
 		return fmt.Errorf("failed to cancel task: %w", err)
 	}
 
-	logger.Infof("Canceled task: %d", id)
+	logger.Log.Info("取消任务", zap.Uint("id", id))
 	return nil
 }
 

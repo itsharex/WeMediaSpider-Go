@@ -7,6 +7,8 @@ import (
 
 	"WeMediaSpider/backend/internal/models"
 	"WeMediaSpider/backend/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 // MarkdownExporter Markdown 导出器
@@ -14,11 +16,11 @@ type MarkdownExporter struct{}
 
 // Export 导出为 Markdown
 func (e *MarkdownExporter) Export(articles []models.Article, filename string) error {
-	logger.Infof("📊 开始导出 Markdown 文件: %s (文章数: %d)", filename, len(articles))
+	logger.Log.Info("📊 开始导出 Markdown 文件", zap.String("file", filename), zap.Int("count", len(articles)))
 
 	file, err := os.Create(filename)
 	if err != nil {
-		logger.Errorf("❌ 创建 Markdown 文件失败: %v", err)
+		logger.Log.Error("❌ 创建 Markdown 文件失败", zap.Error(err))
 		return err
 	}
 	defer file.Close()
@@ -32,13 +34,13 @@ func (e *MarkdownExporter) Export(articles []models.Article, filename string) er
 		accountMap[article.AccountName] = append(accountMap[article.AccountName], article)
 	}
 
-	logger.Infof("📝 按 %d 个公众号分组写入...", len(accountMap))
+	logger.Log.Info("📝 按公众号分组写入", zap.Int("accounts", len(accountMap)))
 
 	// 写入每个公众号的文章
 	accountCount := 0
 	for accountName, accountArticles := range accountMap {
 		accountCount++
-		logger.Infof("  正在写入公众号 [%s] (%d/%d) - %d 篇文章", accountName, accountCount, len(accountMap), len(accountArticles))
+		logger.Log.Info("  正在写入公众号", zap.String("account", accountName), zap.Int("no", accountCount), zap.Int("total", len(accountMap)), zap.Int("articles", len(accountArticles)))
 
 		file.WriteString(fmt.Sprintf("## %s\n\n", accountName))
 		file.WriteString(fmt.Sprintf("共 %d 篇文章\n\n", len(accountArticles)))
@@ -59,7 +61,7 @@ func (e *MarkdownExporter) Export(articles []models.Article, filename string) er
 		}
 	}
 
-	logger.Infof("✅ Markdown 文件导出成功: %s", filename)
+	logger.Log.Info("✅ Markdown 文件导出成功", zap.String("file", filename))
 	return nil
 }
 
