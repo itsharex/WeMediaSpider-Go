@@ -1,9 +1,11 @@
 package app
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"WeMediaSpider/backend/internal/database"
@@ -184,6 +186,23 @@ func (a *App) ExportToJSON(dateOrPath string) (string, error) {
 
 	logger.Log.Info("导出JSON成功", zap.Int("count", len(articles)), zap.String("path", savePath))
 	return savePath, nil
+}
+
+// SaveBase64File 将 base64 编码的图片数据保存到指定路径
+func (a *App) SaveBase64File(filePath string, base64Data string) error {
+	// 去除 data URL 前缀（如 data:image/png;base64,）
+	if idx := strings.Index(base64Data, ","); idx >= 0 {
+		base64Data = base64Data[idx+1:]
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("base64 解码失败: %w", err)
+	}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+	logger.Log.Info("图片已保存", zap.String("path", filePath))
+	return nil
 }
 
 // ============================================================

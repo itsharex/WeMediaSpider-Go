@@ -198,6 +198,10 @@ export function RunScheduledTaskNow(arg1) {
   return window['go']['app']['App']['RunScheduledTaskNow'](arg1);
 }
 
+export function SaveBase64File(arg1, arg2) {
+  return window['go']['app']['App']['SaveBase64File'](arg1, arg2);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }

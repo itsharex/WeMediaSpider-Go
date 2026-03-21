@@ -1,105 +1,123 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import * as echarts from 'echarts'
 import 'echarts-wordcloud'
 
-interface WordCloudChartProps {
-  data: Array<{ word: string; count: number }>
+export type ColorScheme = 'green' | 'blue' | 'purple' | 'rainbow'
+export type ExportFormat = 'png' | 'jpeg'
+
+export interface WordCloudRef {
+  exportImage: (format: ExportFormat) => string | null
 }
 
-const WordCloudChart: React.FC<WordCloudChartProps> = ({ data }) => {
+interface WordCloudChartProps {
+  data: Array<{ word: string; count: number }>
+  colorScheme?: ColorScheme
+  sizeRange?: [number, number]
+}
+
+const COLOR_SCHEMES: Record<ColorScheme, string[]> = {
+  green:   ['#07C160', '#52c41a', '#73d13d', '#95de64', '#389e0d', '#237804', '#b7eb8f'],
+  blue:    ['#1677ff', '#40a9ff', '#69c0ff', '#096dd9', '#0050b3', '#4096ff', '#91d5ff'],
+  purple:  ['#722ed1', '#9254de', '#b37feb', '#531dab', '#391085', '#c084fc', '#d3adf7'],
+  rainbow: ['#f5222d', '#fa8c16', '#fadb14', '#52c41a', '#1677ff', '#722ed1', '#eb2f96'],
+}
+
+const WordCloudChart = forwardRef<WordCloudRef, WordCloudChartProps>((
+  { data, colorScheme = 'green', sizeRange = [14, 60] },
+  ref
+) => {
   const chartRef = useRef<HTMLDivElement>(null)
   const chartInstance = useRef<echarts.ECharts | null>(null)
+
+  useImperativeHandle(ref, () => ({
+    exportImage: (format: ExportFormat) => {
+      if (!chartInstance.current) return null
+      return chartInstance.current.getDataURL({
+        type: format,
+        pixelRatio: 2,
+        backgroundColor: '#141414',
+      })
+    },
+  }))
 
   useEffect(() => {
     if (!chartRef.current || !data || data.length === 0) return
 
-    // 初始化图表
-    if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current)
+    // 销毁旧实例（配色/尺寸变化时重建，确保布局正确）
+    if (chartInstance.current) {
+      chartInstance.current.dispose()
+      chartInstance.current = null
     }
 
-    // 转换数据格式
-    const wordCloudData = data.map(item => ({
-      name: item.word,
-      value: item.count,
-    }))
+    const container = chartRef.current
+    chartInstance.current = echarts.init(container)
 
-    // 配置词云
+    const colors = COLOR_SCHEMES[colorScheme]
+    const wordCloudData = data.map(item => ({ name: item.word, value: item.count }))
+
     const option = {
       tooltip: {
         show: true,
-        formatter: (params: any) => {
-          return `${params.name}: ${params.value}`
-        },
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        borderColor: '#07C160',
+        formatter: (params: any) => `${params.name}: ${params.value}`,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        borderColor: colors[0],
         borderWidth: 1,
-        textStyle: {
-          color: '#fff',
-        },
+        textStyle: { color: '#fff', fontSize: 12 },
       },
-      series: [
-        {
-          type: 'wordCloud',
-          shape: 'circle',
-          // 词云大小范围
-          sizeRange: [12, 60],
-          // 旋转角度范围
-          rotationRange: [-45, 45],
-          rotationStep: 45,
-          // 词语间距
-          gridSize: 8,
-          // 绘制超出边界
-          drawOutOfBound: false,
-          // 布局动画
-          layoutAnimation: true,
-          // 文字样式
-          textStyle: {
-            fontFamily: 'sans-serif',
-            fontWeight: 'bold',
-            // 颜色函数 - 绿色系渐变
-            color: function () {
-              const colors = [
-                '#07C160',
-                '#52c41a',
-                '#73d13d',
-                '#95de64',
-                '#b7eb8f',
-                '#d9f7be',
-                '#1890ff',
-                '#40a9ff',
-                '#69c0ff',
-              ]
-              return colors[Math.floor(Math.random() * colors.length)]
-            },
+      series: [{
+        type: 'wordCloud',
+        // 明确铺满整个画布
+        left: 0,
+        top: 0,
+        width: '100%',
+        height: '100%',
+        shape: 'circle',
+        sizeRange,
+        // 以水平为主，少量倾斜，更易读
+        rotationRange: [-30, 30],
+        rotationStep: 30,
+        // 减小间距，词云更紧凑生动
+        gridSize: 6,
+        drawOutOfBound: false,
+        layoutAnimation: true,
+        // 根据权重调整字体粗细
+        textStyle: {
+          fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif',
+          fontWeight: (params: any) => {
+            const max = wordCloudData[0]?.value || 1
+            return params.data.value / max > 0.5 ? 'bold' : 'normal'
           },
-          emphasis: {
-            focus: 'self',
-            textStyle: {
-              textShadowBlur: 10,
-              textShadowColor: '#07C160',
-            },
-          },
-          data: wordCloudData,
+          color: () => colors[Math.floor(Math.random() * colors.length)],
         },
-      ],
+        emphasis: {
+          focus: 'self',
+          textStyle: {
+            textShadowBlur: 12,
+            textShadowColor: colors[0],
+          },
+        },
+        data: wordCloudData,
+      }],
     }
 
     chartInstance.current.setOption(option)
 
-    // 监听容器大小变化
-    const resizeObserver = new ResizeObserver(() => {
+    // 延迟一帧 resize，确保容器尺寸已完全稳定
+    const rafId = requestAnimationFrame(() => {
       chartInstance.current?.resize()
     })
 
-    resizeObserver.observe(chartRef.current)
+    const resizeObserver = new ResizeObserver(() => {
+      chartInstance.current?.resize()
+    })
+    resizeObserver.observe(container)
 
     return () => {
+      cancelAnimationFrame(rafId)
       resizeObserver.disconnect()
     }
-  }, [data])
+  }, [data, colorScheme, sizeRange])
 
-  // 清理
   useEffect(() => {
     return () => {
       chartInstance.current?.dispose()
@@ -110,13 +128,10 @@ const WordCloudChart: React.FC<WordCloudChartProps> = ({ data }) => {
   return (
     <div
       ref={chartRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        minHeight: 200,
-      }}
+      style={{ width: '100%', height: '100%', minHeight: 200 }}
     />
   )
-}
+})
 
+WordCloudChart.displayName = 'WordCloudChart'
 export default WordCloudChart

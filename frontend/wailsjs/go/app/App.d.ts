@@ -104,6 +104,8 @@ export function OpenDataFileDialog():Promise<string>;
 
 export function RunScheduledTaskNow(arg1:number):Promise<void>;
 
+export function SaveBase64File(arg1:string,arg2:string):Promise<void>;
+
 export function SaveConfig(arg1:models.Config):Promise<void>;
 
 export function SearchAccount(arg1:string):Promise<Array<models.Account>>;

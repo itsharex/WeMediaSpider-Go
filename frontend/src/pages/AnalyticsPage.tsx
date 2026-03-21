@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react'
-import { Card, DatePicker, Button, Spin, App, Select } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import React, { useState, useEffect, useRef } from 'react'
+import { Card, DatePicker, Button, Spin, App, Select, Slider, Tooltip } from 'antd'
+import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
-import { GetAnalyticsData, ClearAnalyticsCache, GetAllAccountNames, GetTimeInfo } from '../../wailsjs/go/app/App'
+import { GetAnalyticsData, ClearAnalyticsCache, GetAllAccountNames, GetTimeInfo, SelectSaveFile, SaveBase64File } from '../../wailsjs/go/app/App'
 import TimeDistributionChart from '../components/charts/TimeDistributionChart'
-import WordCloudChart from '../components/charts/WordCloudChart'
+import WordCloudChart, { WordCloudRef, ColorScheme, ExportFormat } from '../components/charts/WordCloudChart'
 
 const { RangePicker } = DatePicker
 
@@ -29,6 +29,29 @@ const AnalyticsPage: React.FC = () => {
   ])
   const [allAccounts, setAllAccounts] = useState<string[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
+  const wordCloudRef = useRef<WordCloudRef>(null)
+  const [colorScheme, setColorScheme] = useState<ColorScheme>('green')
+  const [sizeRange, setSizeRange] = useState<[number, number]>([14, 60])
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async (format: ExportFormat) => {
+    const dataURL = wordCloudRef.current?.exportImage(format)
+    if (!dataURL) { antMessage.warning('词云暂无数据'); return }
+    const ext = format === 'jpeg' ? 'jpg' : format
+    const path = await SelectSaveFile(`词云_${dayjs().format('YYYYMMDD_HHmmss')}.${ext}`, [
+      { DisplayName: `${format.toUpperCase()} 图片`, Pattern: `*.${ext}` },
+    ])
+    if (!path) return
+    setExporting(true)
+    try {
+      await SaveBase64File(path, dataURL)
+      antMessage.success('词云已导出')
+    } catch {
+      antMessage.error('导出失败')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // 初始化中国时间并加载数据
   useEffect(() => {
@@ -206,16 +229,64 @@ const AnalyticsPage: React.FC = () => {
 
             {/* 关键词词云 */}
             <Card
-              title="热门关键词"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                flex: 1,
-                overflow: 'hidden'
-              }}
-              bodyStyle={{ height: 'calc(100% - 40px)', padding: 16 }}
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <span>热门关键词</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* 配色方案 */}
+                    <Select
+                      size="small"
+                      value={colorScheme}
+                      onChange={v => setColorScheme(v)}
+                      style={{ width: 90 }}
+                      options={[
+                        { value: 'green', label: '🟢 绿色' },
+                        { value: 'blue', label: '🔵 蓝色' },
+                        { value: 'purple', label: '🟣 紫色' },
+                        { value: 'rainbow', label: '🌈 彩虹' },
+                      ]}
+                    />
+                    {/* 导出按钮 */}
+                    <Select
+                      size="small"
+                      placeholder="导出"
+                      style={{ width: 80 }}
+                      loading={exporting}
+                      suffixIcon={<DownloadOutlined />}
+                      value={null}
+                      onChange={(fmt: ExportFormat) => handleExport(fmt)}
+                      options={[
+                        { value: 'png', label: 'PNG' },
+                        { value: 'jpeg', label: 'JPEG' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              }
+              style={{ background: 'rgba(255, 255, 255, 0.05)', flex: 1, overflow: 'hidden' }}
+              bodyStyle={{ height: 'calc(100% - 56px)', padding: '8px 16px 16px' }}
             >
+              {/* 字体大小范围 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', flexShrink: 0 }}>字号</span>
+                <Slider
+                  range
+                  min={8}
+                  max={80}
+                  value={sizeRange}
+                  onChange={v => setSizeRange(v as [number, number])}
+                  style={{ flex: 1 }}
+                  tooltip={{ formatter: v => `${v}px` }}
+                />
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', flexShrink: 0 }}>{sizeRange[0]}–{sizeRange[1]}px</span>
+              </div>
               {data?.topKeywords && data.topKeywords.length > 0 ? (
-                <WordCloudChart data={data.topKeywords} />
+                <WordCloudChart
+                  ref={wordCloudRef}
+                  data={data.topKeywords}
+                  colorScheme={colorScheme}
+                  sizeRange={sizeRange}
+                />
               ) : (
                 <div style={{ color: 'rgba(255, 255, 255, 0.45)', textAlign: 'center', paddingTop: 80 }}>
                   暂无数据
